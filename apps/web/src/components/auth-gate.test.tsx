@@ -1,3 +1,4 @@
+import { type FunctionReference, getFunctionName } from "convex/server";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthGate, RequestAccess } from "./auth-gate";
@@ -16,7 +17,10 @@ vi.mock("convex/react", () => ({
     isAuthenticated: state.authenticated,
     isLoading: state.loading,
   }),
-  useQuery: () => state.reader,
+  useQuery: (reference: FunctionReference<"query">) =>
+    getFunctionName(reference) === "auth:currentReader"
+      ? state.reader
+      : undefined,
   useMutation: () => vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ usePathname: () => state.pathname }));

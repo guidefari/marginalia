@@ -46,6 +46,7 @@ vi.mock("@/lib/reader-settings", () => ({
 }));
 vi.mock("@/lib/use-reader-theme", () => ({ useReaderTheme: applyTheme }));
 vi.mock("convex/react", () => ({
+  useConvexAuth: () => ({ isAuthenticated: true, isLoading: false }),
   useQuery: (ref: FunctionReference<"query">) => {
     switch (getFunctionName(ref)) {
       case "userNotes:listAll":

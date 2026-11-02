@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+
+import { type FunctionReference, getFunctionName } from "convex/server";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +15,8 @@ import {
 const state = vi.hoisted(() => ({
   authenticated: false,
   reader: undefined as { isOwner: boolean } | null | undefined,
+  queries: vi.fn(),
+  mutate: vi.fn(),
 }));
 const toast = vi.hoisted(() => vi.fn());
 const signUp = vi.hoisted(() => vi.fn());
@@ -22,8 +26,20 @@ vi.mock("convex/react", () => ({
     isAuthenticated: state.authenticated,
     isLoading: false,
   }),
-  useQuery: () => state.reader,
-  useMutation: () => vi.fn(),
+  useQuery: (reference: FunctionReference<"query">, args: unknown) => {
+    const name = getFunctionName(reference);
+    state.queries(name, args);
+    if (name === "auth:currentReader") return state.reader;
+    if (
+      name === "readingPages:overview" &&
+      (!state.authenticated || !state.reader)
+    )
+      throw new Error(
+        "Protected overview started without reader authorization",
+      );
+    return undefined;
+  },
+  useMutation: () => state.mutate,
 }));
 vi.mock("sonner", () => ({ toast }));
 const session = vi.hoisted(() => ({ data: null as object | null }));
@@ -65,6 +81,25 @@ afterEach(async () => {
 });
 
 describe("one-time tokens in the URL", () => {
+  it.each([
+    "/privacy",
+    "/terms",
+    "/help/deep-study",
+  ])("keeps %s public for authenticated disabled or unapproved accounts without page queries", async (pathname) => {
+    state.authenticated = true;
+    state.reader = null;
+    history.replaceState(null, "", pathname);
+    await act(async () =>
+      root.render(<AuthGate>Public legal or help content</AuthGate>),
+    );
+    expect(document.body.textContent).toBe("Public legal or help content");
+    expect(
+      state.queries.mock.calls.filter(([name]) =>
+        name.startsWith("readingPages:"),
+      ),
+    ).toEqual([]);
+    expect(state.mutate).not.toHaveBeenCalled();
+  });
   it("keeps the reader-shaped loading state without mounting private content before authorization", async () => {
     state.authenticated = true;
     history.replaceState(null, "", "/read/private-article");
@@ -86,6 +121,11 @@ describe("one-time tokens in the URL", () => {
       root.render(<AuthGate>Private article text</AuthGate>),
     );
     expect(document.body.textContent).toBe("Private article text");
+    expect(
+      state.queries.mock.calls.some(
+        ([name, args]) => name === "readingPages:overview" && args !== "skip",
+      ),
+    ).toBe(true);
   });
   it("takes both tokens and keeps the path and query", () => {
     history.replaceState(null, "", "/library?view=all#invite=abc&setup=def");

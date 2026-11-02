@@ -208,7 +208,7 @@ export function PageGoalTracker({ days }: { days: number | "month" }) {
       </p>
       {data.visible && goal !== null && (
         <progress
-          className="mt-3 h-1 w-full accent-[var(--reader-accent)]"
+          className="mt-3 h-1 w-full accent-[var(--reader-fg)]"
           aria-label="Daily estimated page goal"
           aria-valuetext={`${formatPages(words)} of ${formatPages(goal)} estimated pages`}
           max={goal}
