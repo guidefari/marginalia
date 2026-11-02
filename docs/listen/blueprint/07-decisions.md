@@ -16,6 +16,16 @@ Every decision from the planning session on 2026-10-22, including the options we
 
 ## Decisions
 
+### D-TTS-030: Prepare source-linked spoken text with an LLM before TTS. (BK, 2026-11-02)
+- **Replaces:** D-TTS-011's exclusion of code and tables; the source article itself remains authoritative and Marginalia's commentary stays out.
+- **BK requested:** reformat and repunctuate written content for listening, including headings, tables, charts, images and code, before passing it to TTS. Research existing work first rather than replacing working infrastructure.
+- **Decision:** retain Kokoro, the current player and reader-owned provider routing. Add bounded Quick-model preparation with exact-source prose edits, labeled code explanations, deterministic table labels and source-provided visual descriptions. Missing visual evidence is disclosed, never inferred from a filename or surrounding prose. This is not summary or podcast mode.
+- **Bounds and trade-offs:** 1,000 source characters, 2,000 prepared characters, capped model dispatches, separate preparation budget, and explicit Retry on failure. Preparation adds model cost and latency. No new persistent cache or image-fetch service. See [implementation and verification](../narration-preparation.md) and [research](../../research/spoken-narration.md).
+
+### D-TTS-031: Keep the current spoken passage visible, including within long blocks. (BK, 2026-11-02)
+- **Extends:** D-TTS-012 and D-TTS-029. Follow starts automatically and tracks progress inside oversized source blocks, not just the start of each paragraph.
+- **Decision:** retain a deliberate manual-scroll override and the Follow control, toolbar and pill clearance, and reduced-motion support. Layout changes recheck the current passage instead of being treated as browsing. Natural-voice progress is approximate because Kokoro provides no word timestamps; it never controls completion or clip order.
+
 ### D-TTS-001: Listen speaks with a natural synthesized voice, not the device's speech engine. (BK)
 - **BK said:** "the text to speech on this app is a joke, it's some wacky robotic voice."
 - **Why:** the Web Speech voice varies by device and is often the robotic one. Current models score far above it, for under a dollar an hour ([research](../../research/text-to-speech.md)).

@@ -8,6 +8,10 @@ import {
   type VoiceSampleSource,
 } from "./listening-settings";
 
+vi.mock("@/lib/narration-preparation", () => ({
+  createTextPreparer: () => async (text: string) => text,
+}));
+
 const HEART = "openrouter:hexgrad/kokoro-82m#af_heart";
 const EMMA = "openrouter:hexgrad/kokoro-82m#bf_emma";
 

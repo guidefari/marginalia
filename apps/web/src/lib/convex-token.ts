@@ -16,6 +16,11 @@ let inflight: Promise<string | null> | null = null;
 let session: string | null = null;
 let generation = 0;
 
+/** Stable across JWT refreshes; changes on sign-out or a different reader session. */
+export function tokenSessionGeneration(): number {
+  return generation;
+}
+
 /** Ties the cache to the signed-in session; a different session starts empty. */
 export function setTokenSession(sessionId: string | null) {
   if (sessionId === session) return;

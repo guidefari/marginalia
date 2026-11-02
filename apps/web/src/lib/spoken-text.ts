@@ -1,3 +1,4 @@
+import type { NarrationKind } from "@marginalia/backend/narration";
 import { paragraphText } from "./paragraphs";
 
 /** The most one clip may carry; the backend refuses more (04-synthesis-and-cache). */
@@ -9,6 +10,7 @@ export const LEAD_CHARS = 300;
 export interface SpokenBlock {
   text: string;
   heading: boolean;
+  kind?: NarrationKind;
 }
 
 const SKIPPED_ANCESTORS = "pre, table";
@@ -48,17 +50,219 @@ export function spokenBlock(el: HTMLElement): SpokenBlock | null {
   if (el.closest(SKIPPED_ANCESTORS) || isCodeOnly(el)) return null;
   const clone = el.cloneNode(true) as HTMLElement;
   for (const sup of clone.querySelectorAll("sup")) {
-    if (FOOTNOTE_MARKER.test(sup.textContent ?? "")) sup.remove();
+    // Numeric exponents are content, not citation markers.
+    const before = sup.previousSibling?.textContent ?? "";
+    if (
+      sup.querySelector('a[href^="#"], [role="doc-noteref"]') ||
+      sup.matches('[role="doc-noteref"]')
+    )
+      sup.remove();
+    else if (
+      /(?:\d|\b[a-z])$/i.test(before) &&
+      /^\d+$/.test(sup.textContent ?? "")
+    )
+      sup.replaceWith(` to the power of ${sup.textContent} `);
+    else if (FOOTNOTE_MARKER.test(sup.textContent ?? "")) sup.remove();
+  }
+  const walker = clone.ownerDocument.createTreeWalker(
+    clone,
+    NodeFilter.SHOW_TEXT,
+  );
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!node.parentElement?.closest("code, math"))
+      node.textContent = (node.textContent ?? "").replace(BRACKETED_NUMBER, "");
   }
   const heading = /^H[1-6]$/.test(el.tagName);
   let text = paragraphText(clone)
-    .replace(BRACKETED_NUMBER, "")
     .replace(BARE_URL, linkSentence)
     .replace(/\s+/g, " ")
     .trim();
   if (!text) return null;
   if (heading && !CLOSING_PUNCTUATION.test(text)) text += ".";
   return { text, heading };
+}
+
+/** A listening anchor never changes the reader's canonical paragraph numbering. */
+export interface NarrationEntry {
+  element: HTMLElement;
+  sourceIndex: number;
+  sourceEndIndex?: number;
+  spoken: SpokenBlock;
+}
+
+function imageEvidence(image: HTMLElement): string {
+  const alt = image.getAttribute("alt")?.trim();
+  const ids = [
+    image.getAttribute("aria-describedby"),
+    image.getAttribute("aria-details"),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .split(/\s+/);
+  const references = ids.flatMap((id) => {
+    const element = image.ownerDocument.getElementById(id);
+    return element?.textContent?.trim() ? [element] : [];
+  });
+  const readElsewhere = references.some((element) =>
+    element.closest("[data-para]"),
+  );
+  const descriptions = references
+    .filter((element) => !element.closest("[data-para]"))
+    .map((element) => element.textContent?.trim())
+    .filter(Boolean);
+  if (
+    !descriptions.length &&
+    !readElsewhere &&
+    (image.getAttribute("alt") === "" ||
+      image.getAttribute("role") === "presentation")
+  )
+    return "";
+  const caption = image
+    .closest("figure")
+    ?.querySelector("figcaption")
+    ?.textContent?.trim();
+  // Captions have their own source anchor; do not narrate them twice.
+  const evidence = [
+    ...new Set(
+      [alt === caption ? undefined : alt, ...descriptions].filter(Boolean),
+    ),
+  ];
+  return evidence.length
+    ? `Image description provided by the source: ${evidence.join(". ")}`
+    : readElsewhere
+      ? "An image is described in the article's accompanying text."
+      : caption
+        ? "An image accompanies the following caption. Its visual details are not available for this narration."
+        : "An image appears here, but no description was provided. Its visual details are not available for this narration.";
+}
+
+function tableEvidence(table: HTMLElement): string {
+  const rows = Array.from(table.querySelectorAll("tr")).filter(
+    (row) => row.closest("table") === table,
+  );
+  const caption = table.querySelector("caption")?.textContent?.trim();
+  const header = rows.find(
+    (row) =>
+      row.children.length > 0 &&
+      Array.from(row.children).every((cell) => cell.tagName === "TH"),
+  );
+  const headers = header
+    ? Array.from(header.children).map(
+        (cell) => cell.textContent?.trim() || "Unlabelled column",
+      )
+    : [];
+  const complex = Boolean(
+    table.querySelector(
+      '[rowspan]:not([rowspan="1"]), [colspan]:not([colspan="1"]), table',
+    ),
+  );
+  const detail = rows
+    .map((row) => {
+      const cells = Array.from(row.children).filter((cell) =>
+        /^(TH|TD)$/.test(cell.tagName),
+      );
+      if (row === header && cells.every((cell) => cell.tagName === "TH"))
+        return `Column headings: ${headers.join("; ")}.`;
+      return `${cells
+          .map(
+            (cell, i) =>
+              `${complex ? `Cell ${i + 1}` : (headers[i] ?? `Column ${i + 1}`)}: ${cell.textContent?.trim() || "blank"}`,
+          )
+          .join("; ")}.`;
+    })
+    .join("\n");
+  return `Table${caption ? `: ${caption}` : ""}. ${complex ? "This table has grouped or merged cells; the following is a row-by-row reading, not a complete account of its header relationships. " : ""}\n${detail}\nEnd of table.`;
+}
+
+/** Retain visual evidence before flattening, while keeping the original DOM untouched. */
+export function narrationEntries(
+  body: HTMLElement | null,
+  paragraphs: HTMLElement[],
+): NarrationEntry[] {
+  if (!body)
+    return paragraphs.flatMap((element, sourceIndex) => {
+      const spoken = spokenBlock(element);
+      return spoken ? [{ element, sourceIndex, spoken }] : [];
+    });
+  const numbered = new Map(paragraphs.map((el, i) => [el, i]));
+  const candidates = Array.from(
+    body.querySelectorAll<HTMLElement>("[data-para], table, img"),
+  );
+  let sourceIndex = 0;
+  return candidates.flatMap((element): NarrationEntry[] => {
+    const own = numbered.get(element);
+    if (own !== undefined) sourceIndex = own;
+    if (element.closest("[data-marginalia-ui]")) return [];
+    if (element.tagName !== "TABLE" && element.closest("table")) return [];
+    if (element.tagName === "TABLE" && element.parentElement?.closest("table"))
+      return [];
+    // Images inside a prose leaf are represented at their position in that leaf.
+    if (
+      element.tagName === "IMG" &&
+      element.parentElement?.closest("[data-para]")
+    )
+      return [];
+    let spoken: SpokenBlock | null;
+    if (element.tagName === "TABLE")
+      spoken = { text: tableEvidence(element), heading: false, kind: "table" };
+    else if (element.tagName === "IMG")
+      spoken = { text: imageEvidence(element), heading: false, kind: "image" };
+    else if (element.tagName === "PRE" || isCodeOnly(element))
+      spoken = {
+        text: element.textContent ?? "",
+        heading: false,
+        kind: "code",
+      };
+    else {
+      const clone = element.cloneNode(true) as HTMLElement;
+      for (const image of clone.querySelectorAll<HTMLElement>("img"))
+        image.replaceWith(imageEvidence(image));
+      spoken = spokenBlock(clone);
+      if (spoken) {
+        const item = element.closest("li");
+        spoken.kind = spoken.heading ? "heading" : item ? "list" : "prose";
+        if (item?.parentElement?.tagName === "OL") {
+          const list = item.parentElement as HTMLOListElement;
+          const siblings = Array.from(list.children).filter(
+            (el) => el.tagName === "LI",
+          );
+          let number = list.hasAttribute("start")
+            ? list.start
+            : list.reversed
+              ? siblings.length
+              : 1;
+          for (const sibling of siblings) {
+            if (sibling.hasAttribute("value"))
+              number = (sibling as HTMLLIElement).value;
+            if (sibling === item) break;
+            number += list.reversed ? -1 : 1;
+          }
+          spoken.text = `Step ${number}. ${spoken.text}`;
+        }
+      }
+    }
+    const tableIndices =
+      element.tagName === "TABLE"
+        ? Array.from(
+            element.querySelectorAll<HTMLElement>("[data-para]"),
+          ).flatMap((child) => {
+            const index = numbered.get(child);
+            return index === undefined ? [] : [index];
+          })
+        : [];
+    return spoken?.text.trim()
+      ? [
+          {
+            element,
+            sourceIndex: tableIndices[0] ?? own ?? sourceIndex,
+            ...(tableIndices.length
+              ? { sourceEndIndex: tableIndices[tableIndices.length - 1] }
+              : {}),
+            spoken,
+          },
+        ]
+      : [];
+  });
 }
 
 /** What opens a listen from the top: "<title>. By <author>.", or just "<title>.". */

@@ -1,0 +1,35 @@
+{
+  "version": "spoken-1",
+  "policyHash": "c6ad36adcb8a0f7468a7fb29d365006d4aea5094720c78c9cde5613f5910e656",
+  "checkedAt": "2026-11-02T09:42:09.693Z",
+  "passed": 1,
+  "total": 1,
+  "scope": "Live text preparation on public synthetic fixtures. Not listening or browser validation.",
+  "records": [
+    {
+      "name": "units",
+      "passed": true,
+      "source": "The route is 12 km long. The request took 100 ms. The date 01/02/2023 is ambiguous.",
+      "text": "The route is 12 kilometers long. The request took 100 milliseconds. The date 01/02/2023 is ambiguous.",
+      "model": "openrouter:google/gemini-3.8-flash",
+      "durationMs": 2490,
+      "events": [
+        {
+          "modelId": "openrouter:google/gemini-3.8-flash",
+          "responseModel": "google/gemini-3.8-flash",
+          "durationMs": 2481,
+          "finishReason": "stop",
+          "parsed": true,
+          "tokens": {
+            "input": 1064,
+            "cachedInput": 0,
+            "output": 213,
+            "visibleOutput": 31,
+            "reasoning": 182,
+            "total": 1277
+          }
+        }
+      ]
+    }
+  ]
+}

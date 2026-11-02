@@ -7,6 +7,10 @@ export interface QueueItem {
   text: string;
   /** Headings are followed by the longer pause. */
   heading: boolean;
+  kind?: SpokenBlock["kind"];
+  /** Source-relative bounds, independent of rewritten speech. */
+  sourceStart: number;
+  sourceEnd: number;
 }
 
 /** The title item sits before the first paragraph and belongs to no paragraph. */
@@ -31,24 +35,64 @@ export function buildQueue(
   start: number,
   lang: string,
   intro?: string,
+  maxChars?: number,
 ): QueueItem[] {
   const items: QueueItem[] = [];
-  const push = (block: number, parts: string[], heading: boolean) => {
-    for (const [part, text] of parts.entries())
-      items.push({ block, part, text, heading });
+  const push = (
+    block: number,
+    parts: string[],
+    heading: boolean,
+    kind?: SpokenBlock["kind"],
+  ) => {
+    const total = parts.reduce((sum, text) => sum + text.length, 0);
+    let offset = 0;
+    for (const [part, text] of parts.entries()) {
+      items.push({
+        block,
+        part,
+        text,
+        heading,
+        sourceStart: offset / total,
+        sourceEnd: (offset + text.length) / total,
+        ...(kind ? { kind } : {}),
+      });
+      offset += text.length;
+    }
   };
   // The first thing heard is capped at 300 units: the title when there is one,
   // else the first block that will be read, which may be after a skipped start
-  if (start === 0 && intro) push(TITLE_BLOCK, splitLeading(intro, lang), true);
+  if (start === 0 && intro)
+    push(
+      TITLE_BLOCK,
+      splitLeading(intro, lang, undefined, maxChars),
+      true,
+      "heading",
+    );
   const lead = blocks.findIndex((block, index) => block && index >= start);
   blocks.forEach((block, index) => {
     if (!block) return;
+    if (block.kind === "code") {
+      // Arbitrary prose cuts lose code indentation and branch context.
+      const fits = block.text.length <= (maxChars ?? 2000);
+      push(
+        index,
+        [
+          fits
+            ? block.text
+            : "Code sample. This sample is too long to explain reliably in one spoken passage. The complete code remains on the page. Returning to the article.",
+        ],
+        false,
+        fits ? "code" : "prose",
+      );
+      return;
+    }
     push(
       index,
       index === lead
-        ? splitLeading(block.text, lang)
-        : splitSpoken(block.text, lang),
+        ? splitLeading(block.text, lang, undefined, maxChars)
+        : splitSpoken(block.text, lang, maxChars),
       block.heading,
+      block.kind,
     );
   });
   return items;

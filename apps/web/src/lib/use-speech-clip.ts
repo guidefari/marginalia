@@ -5,7 +5,8 @@ import { ConvexHttpClient } from "convex/browser";
 import { ConvexError } from "convex/values";
 import { useMemo } from "react";
 import { getConvexToken } from "./convex-token";
-import type { ClipSource } from "./use-natural-voice";
+import { createTextPreparer, type TextPreparer } from "./narration-preparation";
+import { type ClipSource, rememberClipSpeech } from "./use-natural-voice";
 
 type SpeechClipArgs = {
   articleId: Id<"articles">;
@@ -44,13 +45,30 @@ export function speechClipSource(
   clip: SpeechClip,
   articleId: Id<"articles">,
   voice?: string,
+  prepare?: TextPreparer,
 ): ClipSource {
   // Convex actions can't be cancelled, so the signal is left to the player,
   // which ignores a result that arrives after Stop
-  return async (text) =>
-    new Blob([await clip({ articleId, text, ...(voice ? { voice } : {}) })], {
-      type: "audio/mpeg",
-    });
+  return async (text, signal, context) => {
+    signal.throwIfAborted();
+    const spoken = prepare
+      ? await prepare(
+          text,
+          signal,
+          context?.kind ?? (context?.heading ? "heading" : "prose"),
+        )
+      : text;
+    signal.throwIfAborted();
+    return rememberClipSpeech(
+      new Blob(
+        [await clip({ articleId, text: spoken, ...(voice ? { voice } : {}) })],
+        {
+          type: "audio/mpeg",
+        },
+      ),
+      spoken,
+    );
+  };
 }
 
 /**
@@ -62,8 +80,9 @@ export function useSpeechClip(
   articleId: Id<"articles">,
   voice: string | undefined,
 ): ClipSource {
+  const prepare = useMemo(() => createTextPreparer(articleId), [articleId]);
   return useMemo(
-    () => speechClipSource(requestSpeechClip, articleId, voice),
-    [articleId, voice],
+    () => speechClipSource(requestSpeechClip, articleId, voice, prepare),
+    [articleId, voice, prepare],
   );
 }

@@ -75,14 +75,52 @@ export function underlyingAIError(error: unknown): unknown {
   return error;
 }
 
+/** Opt-in wire policy: OpenAI's SDK otherwise drops OpenRouter's provider field. */
+const privateOpenRouterFetch: typeof fetch = async (input, init) => {
+  const request = new Request(input, init);
+  if (request.method !== "POST") return fetch(request);
+  // Fail closed on an unexpected wire format; never forward prose without the
+  // requested privacy policy. Neither body nor parse errors enter our logs.
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw new Error("Couldn't apply the requested provider privacy policy");
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    throw new Error("Couldn't apply the requested provider privacy policy");
+  const payload = body as Record<string, unknown>;
+  const provider = payload.provider;
+  if (
+    provider !== undefined &&
+    (!provider || typeof provider !== "object" || Array.isArray(provider))
+  )
+    throw new Error("Couldn't apply the requested provider privacy policy");
+  const headers = new Headers(request.headers);
+  headers.delete("content-length");
+  return fetch(
+    new Request(request, {
+      headers,
+      body: JSON.stringify({
+        ...payload,
+        provider: { ...provider, data_collection: "deny" },
+      }),
+    }),
+  );
+};
+
 /** An AI SDK model that calls the target's provider with the reader's own key. */
-function languageModel(target: ProviderTarget & { provider: Provider }) {
+function languageModel(
+  target: ProviderTarget & { provider: Provider },
+  denyDataCollection = false,
+) {
   switch (target.provider) {
     case "openrouter":
       return createOpenAI({
         baseURL: OPENROUTER_BASE_URL,
         apiKey: target.apiKey,
         headers: { "X-Title": "Marginalia" },
+        ...(denyDataCollection ? { fetch: privateOpenRouterFetch } : {}),
       }).chat(target.model);
     case "openai":
       return createOpenAI({ apiKey: target.apiKey }).chat(target.model);
@@ -138,12 +176,16 @@ export async function generateObjectWithFallback<T>(options: {
   schema: ZodType<T>;
   /** Optional provider wire schema; the full local schema remains authoritative. */
   providerSchema?: Schema<T>;
+  /** Resolve wire compatibility separately for each fallback model. */
+  providerSchemaForTarget?: (modelId: string) => Schema<T> | undefined;
   prompt?: string;
   system?: string;
   /** The reader's own models, tried in order after a retryable failure. */
   targets: ProviderTarget[];
   /** Bound output reservation for tasks that need only a short response. */
   maxOutputTokens?: number;
+  /** Opt in to OpenRouter's deny-data-collection provider routing policy. */
+  denyDataCollection?: boolean;
   /** Told about each failure, so a ChatGPT connection can record its state. */
   onFailure?: (error: unknown) => Promise<void>;
   signal?: AbortSignal;
@@ -203,8 +245,17 @@ export async function generateObjectWithFallback<T>(options: {
           object: await interruptible(
             generateParsedObject<T>(
               target.id,
-              languageModel({ ...target, provider: target.provider }),
-              { ...options, signal: attempt.signal },
+              languageModel(
+                { ...target, provider: target.provider },
+                options.denyDataCollection,
+              ),
+              {
+                ...options,
+                providerSchema:
+                  options.providerSchemaForTarget?.(target.id) ??
+                  options.providerSchema,
+                signal: attempt.signal,
+              },
             ),
             attempt.signal,
           ),

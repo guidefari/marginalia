@@ -15,6 +15,7 @@ import {
 const token = vi.hoisted(() => ({ value: "jwt-1" as string | null }));
 vi.mock("./convex-token", () => ({
   getConvexToken: async () => token.value,
+  tokenSessionGeneration: () => 1,
 }));
 
 const URL = "https://happy-animal-123.convex.cloud";

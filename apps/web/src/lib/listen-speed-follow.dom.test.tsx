@@ -8,6 +8,9 @@ import type { ClipSource } from "./use-natural-voice";
 vi.mock("convex/react", () => ({
   useQuery: () => ({ providers: ["openrouter"] }),
 }));
+vi.mock("./narration-preparation", () => ({
+  createTextPreparer: () => async (text: string) => text,
+}));
 
 // Like a browser, loading a new src puts playbackRate back to defaultPlaybackRate
 class FakeAudio {
