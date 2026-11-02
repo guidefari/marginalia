@@ -23,7 +23,7 @@ Every decision from the planning session on 2026-10-22, including the options we
 - **Bounds and trade-offs:** 1,000 source characters, 2,000 prepared characters, capped model dispatches, separate preparation budget, and explicit Retry on failure. Preparation adds model cost and latency. No new persistent cache or image-fetch service. See [implementation and verification](../narration-preparation.md) and [research](../../research/spoken-narration.md).
 
 ### D-TTS-031: Keep the current spoken passage visible, including within long blocks. (BK, 2026-11-02)
-- **Extends:** D-TTS-012 and D-TTS-029. Follow starts automatically and tracks progress inside oversized source blocks, not just the start of each paragraph.
+- **Extends:** D-TTS-012 and D-TTS-029, replacing the latter's treatment of scroll-anchoring layout shifts as reader browsing. Follow starts automatically and tracks progress inside oversized source blocks, not just the start of each paragraph.
 - **Decision:** retain a deliberate manual-scroll override and the Follow control, toolbar and pill clearance, and reduced-motion support. Layout changes recheck the current passage instead of being treated as browsing. Natural-voice progress is approximate because Kokoro provides no word timestamps; it never controls completion or clip order.
 
 ### D-TTS-001: Listen speaks with a natural synthesized voice, not the device's speech engine. (BK)
@@ -69,7 +69,9 @@ Every decision from the planning session on 2026-10-22, including the options we
 ### D-TTS-010: Speed runs from 0.8× to 2× through `playbackRate`, kept per browser. (Claude, delegated by BK)
 - **Why:** changing speed on the element is instant and costs nothing; resynthesizing at a new speed would cost money and wait. It's an appearance-like preference, so it lives beside the reader settings in browser storage.
 
-### D-TTS-011: The voice reads the print: title and byline, then the prose. Code, tables and Marginalia's notes are never read. (Claude, delegated by BK; Q4)
+### D-TTS-011: ~~The voice reads the print: title and byline, then the prose. Code, tables and Marginalia's notes are never read.~~ (Claude, delegated by BK; Q4)
+
+Replaced by D-TTS-030 for code and tables. Marginalia's notes remain excluded.
 - **Why:** in "Print, pencil and pen", the narrator lends its voice to the author. Margin notes are pencil and would turn listening into an interruption. Code and tables don't survive being spoken. Footnote markers and bare URLs are cleaned so the voice never says "bracket twelve" or a query string.
 
 ### D-TTS-012: The page follows the voice until the reader scrolls; then the bar offers Follow. (Claude, delegated by BK)

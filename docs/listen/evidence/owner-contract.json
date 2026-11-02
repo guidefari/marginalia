@@ -1,0 +1,53 @@
+{
+  "sourceCommit": "021a202",
+  "deployment": "stoic-hare-718",
+  "scope": "Deployment-admin CLI with an existing live owner-session identity; public synthetic passages only. No article or auth session was created or edited. Not a signed-in browser journey.",
+  "records": [
+    {
+      "name": "heading",
+      "passed": true,
+      "text": "Here is the short version.",
+      "version": "spoken-1",
+      "durationMs": 4147
+    },
+    {
+      "name": "units",
+      "passed": true,
+      "text": "The route is 12 kilometers long. The request took 100 milliseconds.",
+      "version": "spoken-1",
+      "durationMs": 3352
+    },
+    {
+      "name": "code",
+      "passed": true,
+      "text": "Code explanation. If count is less than or equal to 3, the snippet returns false. Otherwise, this snippet does not show any further action. End of code explanation.",
+      "version": "spoken-1",
+      "durationMs": 2947
+    },
+    {
+      "name": "prepared-heading-to-speech",
+      "passed": true,
+      "returnedCharacters": 16499,
+      "providerMetadataLogged": true,
+      "scope": "Real synthesis action returned bytes; not an acoustic listening judgement.",
+      "audioBytes": 12360,
+      "probe": {
+        "programs": [],
+        "stream_groups": [],
+        "streams": [
+          {
+            "codec_name": "mp3",
+            "sample_rate": "24000"
+          }
+        ],
+        "format": {
+          "duration": "1.800000"
+        }
+      }
+    },
+    {
+      "name": "anonymous-denied",
+      "passed": true
+    }
+  ]
+}

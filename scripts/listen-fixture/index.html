@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Narration viewport fixture</title>
+<style>
+body{font:22px/1.7 Georgia,serif;background:#f8f5ed;color:#24201b;margin:0}main{max-width:650px;margin:110px auto 600px;padding:0 25px}.reader-toolbar{position:fixed;inset:0 0 auto;height:64px;background:#eee8da;z-index:2;padding:8px}.listen-wrap{position:fixed;bottom:20px;left:20%;right:20%;height:54px;background:#eee8da;z-index:2;padding:8px}button{font:16px system-ui;padding:8px;margin:4px}[data-speaking]{background:#e9dec4}h1{font-size:30px}
+</style>
+<div class="reader-toolbar">Viewport following: real source module</div>
+<main><h1>Long-passage narration fixture</h1><p id="long"></p><h2>Next section</h2><p>The final passage remains in source order.</p></main>
+<div class="listen-wrap"><button id="start">Start</button><button id="advance">Advance</button><button id="follow">Follow</button><output id="status">Ready</output></div>
+<script type="module" src="./fixture.ts"></script>
+</html>

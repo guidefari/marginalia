@@ -99,7 +99,7 @@ const fixtures: {
   },
 ];
 
-/** Reuses the deployment's selected quick-model chain, with no alternate credentials. */
+/** Called by a private harness supplying the reader's selected Quick chain; not a credential loader. */
 export async function evaluateNarration(
   targets: ProviderTarget[],
   outputPath: string,
@@ -205,4 +205,11 @@ export async function evaluateNarration(
     }),
   );
   return report;
+}
+
+if (import.meta.main) {
+  console.error(
+    "Import evaluateNarration(targets, outputPath) from an authenticated private harness; this module does not load credentials or run an evaluation by itself.",
+  );
+  process.exitCode = 1;
 }

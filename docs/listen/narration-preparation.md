@@ -6,7 +6,7 @@ Open an article and choose **Listen**. Each passage is prepared by your Quick AI
 
 - Headings have closing punctuation and a longer pause before their prose. Abbreviations and punctuation can be adapted without replacing the author's argument with a summary.
 - Simple tables are read as labeled cells. Blank cells stay distinct from zero. Merged or grouped tables announce that their complete header relationships could not be recovered.
-- Complete code samples of at most 1,000 characters receive a labeled spoken explanation. Longer samples announce the limitation rather than explaining context-free fragments. Exact code remains on the page; an explanation is not an exact technical reading of every token.
+- Complete code samples of at most 1,000 UTF-16 units receive a labeled spoken explanation. Longer samples announce the limitation rather than explaining context-free fragments. Exact code remains on the page; an explanation is not an exact technical reading of every token.
 - Informative images use source-provided alternatives and descriptions. Captions remain in reading order. Decoration with empty alt text is ignored. Missing visual evidence is announced rather than invented.
 
 The first release does not fetch image pixels, reconstruct missing PDF figures, infer chart trends from neighboring prose, or provide verified mathematical speech. A missing-image notice is a disclosed gap, not an equivalent description of the visual.
@@ -52,5 +52,9 @@ git diff --check
 ```
 
 The `narration-*` suites cover source inventory, source-to-speech ordering, preparation before synthesis, numeric fidelity, cancellation, cache isolation and long-block following. Existing Listen suites cover playback, speed, samples, retry, skip and media controls. A passing fixture is not proof that every model explanation is faithful or that physical-phone background playback works.
+
+For a real-browser layout check, run `bun scripts/listen-follow-fixture.ts` and open `http://127.0.0.1:3119/`. At desktop and mobile widths, choose Start and Advance; `window.viewportEvidence()` should report a point between `toolbarBottom` and `pillTop`. Manual scrolling should set `following` false; Follow should restore it. This fixture imports the production follower but does not play audio.
+
+`packages/backend/scripts/evaluate-narration.ts` exports `evaluateNarration(targets, outputPath, fixtureName?)` for a private authenticated harness supplying the reader's existing Quick chain. It is not a standalone credential loader. Do not commit target objects, provider keys or session identities with evaluation reports.
 
 Read the [research](../research/spoken-narration.md) for the reuse decision and source links. The reusable global skill is `~/.dotfiles/.skills/spoken-narration/SKILL.md`; it is not an application runtime dependency.

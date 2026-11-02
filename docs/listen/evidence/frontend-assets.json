@@ -1,0 +1,10 @@
+{
+  "scope": "Staged production /read route and its public JavaScript assets, retrieved through Vercel protection bypass. No signed-in browser journey.",
+  "scriptsFetched": 18,
+  "narrationActionIncluded": true,
+  "placeholderAbsent": true,
+  "correctConvexHost": true,
+  "correctSiteHost": true,
+  "preparationFailureMessageIncluded": true,
+  "serverPolicyVersionScope": "spoken-1 is a backend response field, not a frontend constant; covered by the live owner contract."
+}
