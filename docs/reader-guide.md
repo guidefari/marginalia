@@ -44,6 +44,10 @@ While reading, a compact toolbar line shows today's pages and goal. Partial arti
 
 Daily history follows the selected Stats period and uses exact credited-word totals, independently of the older reports' visit limits. Earlier history says **Not tracked**; old minutes and completion records are not converted into invented pages. Changes to article text do not rewrite saved totals. If a changed text layout, missing numbered text or an oversized source cannot be matched safely, page tracking is unavailable for that source and the reader explains why. The estimate uses approximate visible text regions, not comprehension or attention detection.
 
+### Desk display
+
+Open [/display](https://reader.bhekani.com/display) on a small desk screen for a separate, live view of today's pages and goal, seven days of page history, and reading time and days over the last 30 days. Sign in on that device with your existing reader account; the display is private and uses the same saved data as Your reading. Leaving it open does not count as reading. **Goals & stats** opens the full controls. **Full screen** hides browser chrome where supported, and **Keep screen on** requests a screen wake lock; browser and device power settings can override it. Offline or reconnecting displays label their saved totals instead of claiming they are live.
+
 ### Appearance
 
 Open settings with `,`. Choose paper/sepia/snow or dark palettes, or Auto to follow the operating system. Adjust the font, size, spacing, width, alignment, paragraph style, drop cap, pen and highlighter. Appearance preferences are stored in this browser, not synchronized across devices.
