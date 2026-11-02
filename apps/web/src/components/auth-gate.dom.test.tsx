@@ -20,6 +20,8 @@ const state = vi.hoisted(() => ({
 }));
 const toast = vi.hoisted(() => vi.fn());
 const signUp = vi.hoisted(() => vi.fn());
+const signIn = vi.hoisted(() => vi.fn());
+const passkeySignIn = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ usePathname: () => location.pathname }));
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
@@ -47,7 +49,7 @@ const rearm = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/auth-client", () => ({
   authClient: {
     signUp: { email: signUp },
-    signIn: {},
+    signIn: { email: signIn, passkey: passkeySignIn },
     useSession: () => ({ data: session.data }),
   },
 }));
@@ -173,6 +175,161 @@ describe("one-time tokens in the URL", () => {
     expect(document.body.textContent).toContain("Set up your reader");
     expect(document.querySelector('input[name="name"]')).not.toBeNull();
     expect(toast).not.toHaveBeenCalled();
+  });
+});
+
+describe("sign-in focus transitions", () => {
+  function button(label: string) {
+    const control = [...document.querySelectorAll("button")].find(
+      (element) => element.textContent === label,
+    );
+    expect(control).toBeDefined();
+    return control!;
+  }
+
+  async function activate(label: string) {
+    const control = button(label);
+    control.focus();
+    await act(async () => control.click());
+  }
+
+  it("does not steal focus on initial load", async () => {
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+    await act(async () => root.render(<AuthGate>desk</AuthGate>));
+    expect(document.activeElement).toBe(outside);
+  });
+
+  it("focuses Email when opening password sign-in and the passkey control when returning", async () => {
+    await act(async () => root.render(<AuthGate>desk</AuthGate>));
+    await activate("Use email and password");
+    expect(document.activeElement).toBe(
+      document.querySelector('input[name="email"]'),
+    );
+    await activate("Use a passkey instead");
+    expect(document.activeElement).toBe(button("Continue with a passkey"));
+    expect(signIn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    false,
+    true,
+  ])("focuses the access request and returns to the previous sign-in mode (password: %s)", async (password) => {
+    await act(async () => root.render(<AuthGate>desk</AuthGate>));
+    if (password) await activate("Use email and password");
+    await activate("Request access");
+    expect(document.activeElement).toBe(
+      document.querySelector('input[name="email"]'),
+    );
+    await activate("Back to sign in");
+    expect(document.activeElement).toBe(
+      password
+        ? document.querySelector('input[name="email"]')
+        : button("Continue with a passkey"),
+    );
+    expect(state.mutate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["invite", "name"],
+    ["setup", "email"],
+  ])("focuses the first field for a %s link", async (token, field) => {
+    history.replaceState(null, "", `/#${token}=fixture-token`);
+    await act(async () => root.render(<AuthGate>desk</AuthGate>));
+    expect(document.activeElement).toBe(
+      document.querySelector(`input[name="${field}"]`),
+    );
+    expect(signUp).not.toHaveBeenCalled();
+  });
+
+  it("focuses the second-factor field and refocuses it when switching code types", async () => {
+    signIn.mockResolvedValueOnce({ data: { twoFactorRedirect: true } });
+    await act(async () => root.render(<AuthGate>desk</AuthGate>));
+    await activate("Use email and password");
+    await act(async () =>
+      document
+        .querySelector("form")!
+        .dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }),
+        ),
+    );
+    expect(document.activeElement).toBe(
+      document.querySelector('input[name="code"]'),
+    );
+    await activate("Use a recovery code");
+    expect(document.activeElement).toBe(
+      document.querySelector('input[name="code"]'),
+    );
+    expect(document.activeElement?.getAttribute("inputmode")).toBe("text");
+    await activate("Use an authenticator code");
+    expect(document.activeElement).toBe(
+      document.querySelector('input[name="code"]'),
+    );
+    expect(document.activeElement?.getAttribute("inputmode")).toBe("numeric");
+  });
+
+  it("does not move focus away from a field on a sign-in error", async () => {
+    signIn.mockResolvedValueOnce({ error: { message: "Fixture rejection" } });
+    await act(async () => root.render(<AuthGate>desk</AuthGate>));
+    await activate("Use email and password");
+    const password = document.querySelector<HTMLInputElement>(
+      'input[name="password"]',
+    )!;
+    password.focus();
+    await act(async () =>
+      document
+        .querySelector("form")!
+        .dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }),
+        ),
+    );
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+      "Couldn't sign in",
+    );
+    expect(document.activeElement).toBe(password);
+  });
+
+  it.each([
+    "password",
+    "passkey",
+  ])("does not switch modes during pending %s sign-in", async (mode) => {
+    let finish!: (result: { error: { message: string } }) => void;
+    const pending = new Promise<{ error: { message: string } }>((resolve) => {
+      finish = resolve;
+    });
+    const password = mode === "password";
+    (password ? signIn : passkeySignIn).mockReturnValueOnce(pending);
+    await act(async () => root.render(<AuthGate>desk</AuthGate>));
+    if (password) {
+      await activate("Use email and password");
+      await act(async () =>
+        document
+          .querySelector("form")!
+          .dispatchEvent(
+            new Event("submit", { bubbles: true, cancelable: true }),
+          ),
+      );
+    } else await activate("Continue with a passkey");
+    const toggle = button(
+      password ? "Use a passkey instead" : "Use email and password",
+    );
+    expect(toggle.disabled).toBe(true);
+    const requestAccess = button("Request access");
+    expect(requestAccess.disabled).toBe(true);
+    await act(async () => requestAccess.click());
+    expect(document.querySelector("h1")?.textContent).toBe("Your reading desk");
+    await act(async () => toggle.click());
+    expect(Boolean(document.querySelector("form"))).toBe(password);
+    await act(async () => finish({ error: { message: "Fixture rejection" } }));
+    expect(toggle.disabled).toBe(false);
+    expect(requestAccess.disabled).toBe(false);
+    await activate(toggle.textContent!);
+    expect(document.activeElement).toBe(
+      password
+        ? button("Continue with a passkey")
+        : document.querySelector('input[name="email"]'),
+    );
   });
 });
 
