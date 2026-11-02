@@ -468,6 +468,7 @@ function SignIn({ fragment }: { fragment: FragmentTokens | null }) {
         )}
         {!signingUp && (
           <button
+            disabled={busy}
             className="min-h-11 w-full text-sm text-[var(--reader-muted)] mt-2"
             onClick={() => {
               if (factor) setBackup(!backup);
