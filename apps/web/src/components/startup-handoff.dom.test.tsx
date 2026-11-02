@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import DeskLayout from "@/app/(desk)/layout";
 import DeskRoute from "@/app/(desk)/page";
+import { consumeFinderRequest, requestFinder } from "@/lib/finder-request";
 import { markFinished } from "@/lib/title-handoff";
 
 const loading = vi.hoisted(() => ({
@@ -69,7 +70,10 @@ it("reserves the mobile bar while chunks load and keeps a finish handoff through
     ).toBe("true");
     expect(container.querySelector(".mobile-app-nav")).not.toBeNull();
     expect(placeholder?.isConnected).toBe(false);
+    // Simulate an intent not yet consumed by the real lazy finder.
+    requestFinder();
     await act(async () => root.render(null));
+    expect(consumeFinderRequest()).toBe(false);
     await act(async () =>
       root.render(
         <DeskLayout>
