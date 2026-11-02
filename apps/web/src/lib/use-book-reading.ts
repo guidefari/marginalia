@@ -63,6 +63,8 @@ export function useReadable(
   return {
     article: bibleDisplay.article,
     sourceArticle: result?.article,
+    feed: result?.feed,
+    missingArticle: result === null,
     readingTimeZone: result?.readingTimeZone,
     bibleDisplay,
     scopeReady: Boolean(result?.article),
