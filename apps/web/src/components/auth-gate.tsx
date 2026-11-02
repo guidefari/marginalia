@@ -6,7 +6,9 @@ import { Fingerprint, LockKeyhole } from "lucide-react";
 import { usePathname } from "next/navigation";
 import {
   type CSSProperties,
+  type Dispatch,
   type ReactNode,
+  type SetStateAction,
   useEffect,
   useRef,
   useState,
@@ -34,6 +36,21 @@ export interface FragmentTokens {
   setup: string;
 }
 
+interface AccessRequestDraft {
+  email: string;
+  name: string;
+  note: string;
+}
+
+type AccessRequestDraftUpdater = Dispatch<
+  SetStateAction<AccessRequestDraft | null>
+>;
+
+interface AccessRequestDraftState {
+  requestDraft: AccessRequestDraft | null;
+  onRequestDraftChange: AccessRequestDraftUpdater;
+}
+
 /**
  * Takes the one-time #invite= and #setup= tokens from the URL and removes
  * the fragment, keeping the path and query, so they never linger in history.
@@ -58,6 +75,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const { settings } = useReaderSettings();
   useReaderTheme(settings);
   const pathname = usePathname();
+  // This gate stays mounted across public notices and background auth checks.
+  // Keep only the access-request draft here, never passwords or browser storage.
+  const [requestDraft, setRequestDraft] = useState<AccessRequestDraft | null>(
+    null,
+  );
   // Only these static notices are public; every reading route stays gated.
   if (
     pathname === "/privacy" ||
@@ -65,13 +87,27 @@ export function AuthGate({ children }: { children: ReactNode }) {
     pathname === "/help/deep-study"
   )
     return children;
-  return <ReaderAccessGate>{children}</ReaderAccessGate>;
+  return (
+    <ReaderAccessGate
+      requestDraft={requestDraft}
+      onRequestDraftChange={setRequestDraft}
+    >
+      {children}
+    </ReaderAccessGate>
+  );
 }
 
-function ReaderAccessGate({ children }: { children: ReactNode }) {
+function ReaderAccessGate({
+  children,
+  requestDraft,
+  onRequestDraftChange,
+}: { children: ReactNode } & AccessRequestDraftState) {
   const pathname = usePathname();
   const { settings } = useReaderSettings();
   const { isAuthenticated, isLoading } = useConvexAuth();
+  useEffect(() => {
+    if (isAuthenticated) onRequestDraftChange(null);
+  }, [isAuthenticated, onRequestDraftChange]);
   // Better Auth's own answer: a session here while Convex says signed out
   // means a token fetch failed, not that the reader signed out
   const { data: session } = authClient.useSession();
@@ -165,7 +201,13 @@ function ReaderAccessGate({ children }: { children: ReactNode }) {
         </div>
       </main>
     );
-  return <SignIn fragment={fragment} />;
+  return (
+    <SignIn
+      fragment={fragment}
+      requestDraft={requestDraft}
+      onRequestDraftChange={onRequestDraftChange}
+    />
+  );
 }
 
 /** How long opening may take before a way to try again appears. */
@@ -255,10 +297,14 @@ function Reconnect() {
   );
 }
 
-function SignIn({ fragment }: { fragment: FragmentTokens | null }) {
+function SignIn({
+  fragment,
+  requestDraft,
+  onRequestDraftChange,
+}: { fragment: FragmentTokens | null } & AccessRequestDraftState) {
   const [setup, setSetup] = useState("");
   const [invite, setInvite] = useState("");
-  const [requesting, setRequesting] = useState(false);
+  const [requesting, setRequesting] = useState(requestDraft !== null);
   const [passwordForm, setPasswordForm] = useState(false);
   const [factor, setFactor] = useState(false);
   const [backup, setBackup] = useState(false);
@@ -352,7 +398,16 @@ function SignIn({ fragment }: { fragment: FragmentTokens | null }) {
     }
   }
   if (requesting && !signingUp)
-    return <RequestAccess onBack={() => setRequesting(false)} />;
+    return (
+      <RequestAccess
+        initialDraft={requestDraft}
+        onDraftChange={onRequestDraftChange}
+        onBack={() => {
+          onRequestDraftChange(null);
+          setRequesting(false);
+        }}
+      />
+    );
   return (
     <main className="auth-screen bg-[var(--reader-bg)] text-[var(--reader-fg)]">
       <div className="w-full max-w-sm">
@@ -490,6 +545,7 @@ function SignIn({ fragment }: { fragment: FragmentTokens | null }) {
             disabled={busy}
             className="min-h-11 w-full text-sm text-[var(--reader-muted)]"
             onClick={() => {
+              onRequestDraftChange({ email: "", name: "", note: "" });
               setRequesting(true);
               setError("");
             }}
@@ -509,7 +565,15 @@ function SignIn({ fragment }: { fragment: FragmentTokens | null }) {
   );
 }
 
-export function RequestAccess({ onBack }: { onBack: () => void }) {
+export function RequestAccess({
+  onBack,
+  initialDraft,
+  onDraftChange,
+}: {
+  onBack: () => void;
+  initialDraft?: AccessRequestDraft | null;
+  onDraftChange?: AccessRequestDraftUpdater;
+}) {
   const request = useMutation(api.waitlist.request);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -521,12 +585,17 @@ export function RequestAccess({ onBack }: { onBack: () => void }) {
     setBusy(true);
     setError("");
     const fields = new FormData(event.currentTarget);
+    const submittedDraft = initialDraft ?? null;
     try {
       const result = await request({
         email: String(fields.get("email") ?? ""),
         name: String(fields.get("name") ?? ""),
         note: String(fields.get("note") ?? "") || undefined,
       });
+      // A later request or edit must not be cleared by this completion.
+      onDraftChange?.((current) =>
+        current === submittedDraft ? null : current,
+      );
       setDone(result.message);
     } catch (e) {
       setError(
@@ -553,7 +622,18 @@ export function RequestAccess({ onBack }: { onBack: () => void }) {
               Marginalia is a small, invite-only reader. Leave your details and
               the owner may send you an invite.
             </p>
-            <form onSubmit={submit} className="space-y-4">
+            <form
+              onSubmit={submit}
+              onInput={(event) => {
+                const fields = new FormData(event.currentTarget);
+                onDraftChange?.({
+                  email: String(fields.get("email") ?? ""),
+                  name: String(fields.get("name") ?? ""),
+                  note: String(fields.get("note") ?? ""),
+                });
+              }}
+              className="space-y-4"
+            >
               <label className="block text-sm">
                 Email
                 <input
@@ -562,6 +642,7 @@ export function RequestAccess({ onBack }: { onBack: () => void }) {
                   name="email"
                   type="email"
                   autoComplete="email"
+                  defaultValue={initialDraft?.email ?? ""}
                   maxLength={254}
                   required
                 />
@@ -572,6 +653,7 @@ export function RequestAccess({ onBack }: { onBack: () => void }) {
                   className="app-input mt-2"
                   name="name"
                   autoComplete="name"
+                  defaultValue={initialDraft?.name ?? ""}
                   maxLength={100}
                   required
                 />
@@ -582,6 +664,7 @@ export function RequestAccess({ onBack }: { onBack: () => void }) {
                 <textarea
                   className="app-input mt-2"
                   name="note"
+                  defaultValue={initialDraft?.note ?? ""}
                   rows={3}
                   maxLength={500}
                 />

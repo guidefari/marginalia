@@ -14,6 +14,7 @@ import {
 
 const state = vi.hoisted(() => ({
   authenticated: false,
+  loading: false,
   reader: undefined as { isOwner: boolean } | null | undefined,
   queries: vi.fn(),
   mutate: vi.fn(),
@@ -26,7 +27,7 @@ vi.mock("next/navigation", () => ({ usePathname: () => location.pathname }));
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
     isAuthenticated: state.authenticated,
-    isLoading: false,
+    isLoading: state.loading,
   }),
   useQuery: (reference: FunctionReference<"query">, args: unknown) => {
     const name = getFunctionName(reference);
@@ -75,6 +76,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   document.body.innerHTML = "";
   state.authenticated = false;
+  state.loading = false;
   state.reader = undefined;
   session.data = null;
   history.replaceState(null, "", "/");
@@ -330,6 +332,180 @@ describe("sign-in focus transitions", () => {
         ? button("Continue with a passkey")
         : document.querySelector('input[name="email"]'),
     );
+  });
+});
+
+describe("access-request drafts", () => {
+  const draft = {
+    email: "qa@example.invalid",
+    name: "QA fixture",
+    note: "Browser-only draft. Do not submit.",
+  };
+
+  async function renderAt(pathname: string) {
+    history.replaceState(null, "", pathname);
+    await act(async () => root.render(<AuthGate>Page content</AuthGate>));
+  }
+
+  async function activate(label: string) {
+    const button = [...document.querySelectorAll("button")].find(
+      (element) => element.textContent === label,
+    )!;
+    await act(async () => button.click());
+  }
+
+  async function startDraft() {
+    await renderAt("/");
+    await activate("Request access");
+    await fillDraft(draft);
+  }
+
+  async function fillDraft(values: typeof draft) {
+    for (const [name, value] of Object.entries(values)) {
+      const input = document.querySelector<
+        HTMLInputElement | HTMLTextAreaElement
+      >(`[name="${name}"]`)!;
+      await act(async () => {
+        input.value = value;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+  }
+
+  function expectDraft(expected = draft) {
+    expect(document.querySelector("h1")?.textContent).toBe("Request access");
+    for (const [name, value] of Object.entries(expected))
+      expect(
+        document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+          `[name="${name}"]`,
+        )?.value,
+      ).toBe(value);
+  }
+
+  async function submit() {
+    await act(async () =>
+      document
+        .querySelector("form")!
+        .dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }),
+        ),
+    );
+  }
+
+  it.each([
+    "/privacy",
+    "/terms",
+  ])("returns from %s to the filled request form without submitting", async (pathname) => {
+    await startDraft();
+    await renderAt(pathname);
+    expect(document.body.textContent).toBe("Page content");
+    await renderAt("/");
+    expectDraft();
+    expect(document.activeElement).toBe(
+      document.querySelector('input[name="email"]'),
+    );
+    expect(state.mutate).not.toHaveBeenCalled();
+  });
+
+  it("keeps the draft across a background auth check", async () => {
+    await startDraft();
+    state.loading = true;
+    await renderAt("/");
+    expect(document.body.textContent).toContain("Opening your reader");
+    state.loading = false;
+    await renderAt("/");
+    expectDraft();
+    expect(state.mutate).not.toHaveBeenCalled();
+  });
+
+  it("clears a draft when explicitly returning to sign-in", async () => {
+    await startDraft();
+    await activate("Back to sign in");
+    await renderAt("/privacy");
+    await renderAt("/");
+    expect(document.querySelector("h1")?.textContent).toBe("Your reading desk");
+    await activate("Request access");
+    for (const input of document.querySelectorAll<
+      HTMLInputElement | HTMLTextAreaElement
+    >("input,textarea"))
+      expect(input.value).toBe("");
+  });
+
+  it("clears a submitted draft only after success", async () => {
+    state.mutate.mockResolvedValueOnce({ message: "Fixture request accepted" });
+    await startDraft();
+    await submit();
+    expect(document.body.textContent).toContain("Fixture request accepted");
+    expect(state.mutate).toHaveBeenCalledWith(draft);
+    await renderAt("/terms");
+    await renderAt("/");
+    expect(document.querySelector("h1")?.textContent).toBe("Your reading desk");
+  });
+
+  it("keeps an unsuccessful draft through legal navigation without retrying it", async () => {
+    state.mutate.mockRejectedValueOnce(new Error("Fixture rejection"));
+    await startDraft();
+    await submit();
+    expect(document.body.textContent).toContain("Couldn't send your request");
+    await renderAt("/privacy");
+    await renderAt("/");
+    expectDraft();
+    expect(state.mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    "sign-in",
+    "auth check",
+  ])("does not clear a newer draft after %s when an older submission succeeds", async (transition) => {
+    let finish!: (result: { message: string }) => void;
+    state.mutate.mockReturnValueOnce(
+      new Promise<{ message: string }>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    await startDraft();
+    await submit();
+    if (transition === "sign-in") {
+      await activate("Back to sign in");
+      await activate("Request access");
+    } else {
+      state.loading = true;
+      await renderAt("/");
+      state.loading = false;
+      await renderAt("/");
+    }
+    // A new attempt may even contain exactly the same words as the old one.
+    const nextDraft = {
+      ...draft,
+      note: transition === "sign-in" ? draft.note : "A newer unsent note",
+    };
+    await fillDraft(nextDraft);
+    await act(async () =>
+      finish({ message: "The older request was accepted" }),
+    );
+    await renderAt("/privacy");
+    await renderAt("/");
+    expectDraft(nextDraft);
+    expect(state.mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the draft when the reader authenticates", async () => {
+    await startDraft();
+    state.authenticated = true;
+    state.reader = { isOwner: true };
+    await renderAt("/");
+    state.authenticated = false;
+    state.reader = undefined;
+    await renderAt("/");
+    expect(document.querySelector("h1")?.textContent).toBe("Your reading desk");
+  });
+
+  it("does not restore the draft after a new page load", async () => {
+    await startDraft();
+    await act(async () => root.unmount());
+    root = createRoot(document.getElementById("root")!);
+    await renderAt("/");
+    expect(document.querySelector("h1")?.textContent).toBe("Your reading desk");
   });
 });
 
