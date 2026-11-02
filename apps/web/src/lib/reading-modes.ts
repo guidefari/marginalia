@@ -150,7 +150,7 @@ export function useListen(
     content,
     contentHtml,
     speed,
-    capabilities && capabilities.providers.length > 0
+    capabilities?.providers.some((provider) => provider !== "chatgpt")
       ? prepareDevice
       : undefined,
   );

@@ -140,6 +140,13 @@ describe("narration preparation before synthesis", () => {
     await expect(bad("Source.", signal())).rejects.toThrow(
       "couldn't be prepared",
     );
+    const empty = createTextPreparer(articleId, async () => ({
+      text: "   ",
+      version: "v1",
+    }));
+    await expect(empty("Source.", signal())).rejects.toThrow(
+      "couldn't be prepared",
+    );
   });
 
   it("does not call any provider when signed out", async () => {

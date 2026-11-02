@@ -1,6 +1,7 @@
 "use client";
 import { api } from "@marginalia/backend/convex/_generated/api";
 import type { Id } from "@marginalia/backend/convex/_generated/dataModel";
+import type { NarrationKind } from "@marginalia/backend/narration";
 import { useMutation, useQuery } from "convex/react";
 import { Play, Square } from "lucide-react";
 import Link from "next/link";
@@ -23,6 +24,7 @@ export interface VoiceSampleSource {
   articleId: Id<"articles">;
   /** The opening of the paragraph the reader is on. */
   text: () => string;
+  kind?: () => NarrationKind;
   /** Listen's state, so a sample doesn't talk over it. */
   listenPlaying: boolean;
   listenPaused: boolean;
@@ -30,7 +32,7 @@ export interface VoiceSampleSource {
 }
 
 type Sampling = { voice: string; token: number };
-type SampleRequest = Sampling & { text: string };
+type SampleRequest = Sampling & { text: string; kind: NarrationKind };
 
 // One sample request at a time, across closing and reopening settings: a
 // request already sent can't be called back, so it keeps the turn until it
@@ -147,7 +149,12 @@ export function ListeningSettings({
     audio.current ??= new Audio();
     audio.current.src = SILENT_CLIP;
     audio.current.play().catch(() => undefined);
-    const next = { voice, token, text: sample.text() };
+    const next = {
+      voice,
+      token,
+      text: sample.text(),
+      kind: sample.kind?.() ?? "prose",
+    };
     if (sampleInFlight)
       nextSample = () => {
         if (tokens.current === token) send(next);
@@ -155,7 +162,7 @@ export function ListeningSettings({
     else send(next);
   };
 
-  const send = ({ voice, token, text }: SampleRequest) => {
+  const send = ({ voice, token, text, kind }: SampleRequest) => {
     const reader = listen.current;
     const element = audio.current;
     if (!reader || !element) return;
@@ -163,7 +170,9 @@ export function ListeningSettings({
     const controller = new AbortController();
     waiting.current = controller;
     trackSpeechRequest(async () => {
-      const spoken = prepare ? await prepare(text, controller.signal) : text;
+      const spoken = prepare
+        ? await prepare(text, controller.signal, kind)
+        : text;
       controller.signal.throwIfAborted();
       return requestSpeechClip({
         articleId: reader.articleId,

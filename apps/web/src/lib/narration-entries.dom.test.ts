@@ -18,6 +18,23 @@ function entries(html: string) {
 }
 
 describe("source-linked narration inventory", () => {
+  it("cleans citations and line breaks in table cells and discloses cell images", () => {
+    const [table] = entries(
+      '<table><tr><th>Place</th><th>Detail</th></tr><tr><td>North<br>West[<a href="#n">1</a>]</td><td>2025<sup>2</sup><img src="chart.png"></td></tr></table>',
+    );
+    expect(table.spoken.text).toContain("Place: North West");
+    expect(table.spoken.text).not.toContain("[1]");
+    expect(table.spoken.text).not.toContain("power of");
+    expect(table.spoken.text).toContain("no description was provided");
+  });
+
+  it("removes citations split across inline markup without losing code indices", () => {
+    entries(
+      '<p data-para="1">In 2025<sup>2</sup>, report[<a>12</a>] showed <code>arr[12]</code>.</p>',
+    );
+    const text = spokenBlock(document.querySelector("p")!)?.text;
+    expect(text).toBe("In 2025, report showed arr[12].");
+  });
   it("keeps headings, table labels, signed values, blank versus zero, code and the final paragraph in order", () => {
     const html =
       '<h2 data-para="1">TL;DR</h2><p data-para="2">Developers tend to build.</p><table><caption>Change, in percent</caption><tr><th>Region</th><th>2025</th></tr><tr><th>North</th><td>-0.5%</td></tr><tr><th>South</th><td></td></tr><tr><th>West</th><td>0</td></tr></table><pre data-para="3"><code>if (count &lt;= 3) return false;</code></pre><p data-para="4">This final exception matters.</p>';

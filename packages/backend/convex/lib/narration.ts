@@ -140,6 +140,14 @@ export function narrationSource(text: string, kind: NarrationKind): string {
     if (image) source = image[1] ?? "";
     if (/^https?:\/\/\S+$/.test(source.trim())) invalid();
   }
+  if (kind !== "code") {
+    // Source cues are spoken words, never executable voice directions. Do not
+    // apply this to code, where brackets and parentheses are source evidence.
+    source = source.replace(
+      /\[((?:pause|music|sighs?|laughs?|whisper|stage direction)[^\]]*)\]|\(((?:pause|sighs?|laughs?|whisper))\)/gi,
+      (_, square, round) => ` ${square ?? round} `,
+    );
+  }
   if (!source.trim() || source.length > MAX_NARRATION_CHARS) invalid();
   return source;
 }
@@ -258,13 +266,18 @@ export function validateCodeExplanation(
   if (!body || hasDirections(body) || /```|^#{1,6}\s/m.test(body)) invalid();
   if (/^Code explanation[.:]|End of code explanation/i.test(body)) invalid();
   const literalPattern = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g;
-  const literals = [...source.matchAll(literalPattern)].map((match) =>
+  // Match strings first so comment-like bytes inside a literal stay evidence.
+  const evidence = source.replace(
+    /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
+    (token) => (token.startsWith("//") || token.startsWith("/*") ? " " : token),
+  );
+  const literals = [...evidence.matchAll(literalPattern)].map((match) =>
     match[0].slice(1, -1),
   );
-  const lexical = source
+  const lexical = evidence
     .replace(literalPattern, " ")
     .replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, " ");
-  const operatorSource = source
+  const operatorSource = evidence
     .replace(literalPattern, "__literal__")
     .replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, " ");
   const keywords = new Set(
@@ -311,7 +324,7 @@ export function validateCodeExplanation(
       return binary ? match[0] : sign + match[0];
     });
   if (
-    JSON.stringify(literalNumbers(source, true)) !==
+    JSON.stringify(literalNumbers(evidence, true)) !==
     JSON.stringify(literalNumbers(body))
   )
     invalid();
@@ -365,7 +378,7 @@ export function validateCodeExplanation(
   if (/\belse\b/.test(lexical) && !/\b(?:else|otherwise)\b/i.test(body))
     invalid();
   const sourceNegations =
-    (lexical.match(/!==|!=|!/g)?.length ?? 0) + countNegations(source);
+    (lexical.match(/!==|!=|!/g)?.length ?? 0) + countNegations(evidence);
   // Exclude only the epistemic negation token in a narrowly identified
   // missing-context introduction, never the rest of its sentence. An embedded
   // "if not score" still counts and is rejected, even after this introduction.

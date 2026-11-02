@@ -5,6 +5,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { makeFunctionReference } from "convex/server";
 import { ConvexError } from "convex/values";
 import { getConvexToken, tokenSessionGeneration } from "./convex-token";
+import { MAX_CLIP_CHARS } from "./spoken-text";
 
 export type TextPreparer = (
   text: string,
@@ -41,10 +42,15 @@ export function createTextPreparer(
   request = requestNarrationPreparation,
 ): TextPreparer {
   const cache = new Map<string, Promise<string>>();
+  let cacheGeneration = tokenSessionGeneration();
   return async (text, signal, kind = "prose") => {
     signal.throwIfAborted();
     const generation = tokenSessionGeneration();
-    const token = await getConvexToken();
+    if (cacheGeneration !== generation) {
+      cache.clear();
+      cacheGeneration = generation;
+    }
+    const token = await getConvexToken(undefined, undefined, signal);
     signal.throwIfAborted();
     if (tokenSessionGeneration() !== generation)
       throw new DOMException("The reader session changed.", "AbortError");
@@ -55,7 +61,7 @@ export function createTextPreparer(
     if (!prepared) {
       prepared = request({ articleId, text, kind, lang }, token).then(
         (result) => {
-          if (!result.text.trim() || result.text.length > 2000)
+          if (!result.text.trim() || result.text.length > MAX_CLIP_CHARS)
             throw new ConvexError(
               "This passage couldn't be prepared for listening. Try again.",
             );

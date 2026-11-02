@@ -49,6 +49,15 @@ function isCodeOnly(el: HTMLElement): boolean {
 export function spokenBlock(el: HTMLElement): SpokenBlock | null {
   if (el.closest(SKIPPED_ANCESTORS) || isCodeOnly(el)) return null;
   const clone = el.cloneNode(true) as HTMLElement;
+  return cleanedSpokenBlock(clone, /^H[1-6]$/.test(el.tagName));
+}
+
+function cleanedSpokenBlock(
+  clone: HTMLElement,
+  heading = false,
+): SpokenBlock | null {
+  for (const br of clone.querySelectorAll("br")) br.replaceWith(" ");
+  for (const block of clone.querySelectorAll("p, div, li")) block.append(" ");
   for (const sup of clone.querySelectorAll("sup")) {
     // Numeric exponents are content, not citation markers.
     const before = sup.previousSibling?.textContent ?? "";
@@ -58,22 +67,27 @@ export function spokenBlock(el: HTMLElement): SpokenBlock | null {
     )
       sup.remove();
     else if (
-      /(?:\d|\b[a-z])$/i.test(before) &&
+      (/(?:\b\d{1,2}|\b[a-z])$/i.test(before) ||
+        Boolean(sup.closest("math, [data-math], .math"))) &&
       /^\d+$/.test(sup.textContent ?? "")
     )
       sup.replaceWith(` to the power of ${sup.textContent} `);
     else if (FOOTNOTE_MARKER.test(sup.textContent ?? "")) sup.remove();
   }
-  const walker = clone.ownerDocument.createTreeWalker(
-    clone,
-    NodeFilter.SHOW_TEXT,
-  );
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    if (!node.parentElement?.closest("code, math"))
-      node.textContent = (node.textContent ?? "").replace(BRACKETED_NUMBER, "");
+  // Clean joined prose so citations spanning inline markup are removed too.
+  // Hold exact code and math aside: arr[12] is not a citation.
+  const protectedText: string[] = [];
+  for (const element of clone.querySelectorAll("code, math")) {
+    if (!clone.contains(element)) continue;
+    const slot = protectedText.push(element.textContent ?? "") - 1;
+    element.replaceWith(`\uE000${slot}\uE001`);
   }
-  const heading = /^H[1-6]$/.test(el.tagName);
   let text = paragraphText(clone)
+    .replace(BRACKETED_NUMBER, "")
+    .replace(
+      /\uE000(\d+)\uE001/g,
+      (_, slot) => protectedText[Number(slot)] ?? "",
+    )
     .replace(BARE_URL, linkSentence)
     .replace(/\s+/g, " ")
     .trim();
@@ -137,10 +151,17 @@ function imageEvidence(image: HTMLElement): string {
 }
 
 function tableEvidence(table: HTMLElement): string {
+  const cellText = (element: Element) => {
+    const clone = element.cloneNode(true) as HTMLElement;
+    for (const image of clone.querySelectorAll<HTMLElement>("img"))
+      image.replaceWith(` ${imageEvidence(image)} `);
+    return cleanedSpokenBlock(clone)?.text ?? "";
+  };
   const rows = Array.from(table.querySelectorAll("tr")).filter(
     (row) => row.closest("table") === table,
   );
-  const caption = table.querySelector("caption")?.textContent?.trim();
+  const captionElement = table.querySelector("caption");
+  const caption = captionElement ? cellText(captionElement) : "";
   const header = rows.find(
     (row) =>
       row.children.length > 0 &&
@@ -148,7 +169,7 @@ function tableEvidence(table: HTMLElement): string {
   );
   const headers = header
     ? Array.from(header.children).map(
-        (cell) => cell.textContent?.trim() || "Unlabelled column",
+        (cell) => cellText(cell) || "Unlabelled column",
       )
     : [];
   const complex = Boolean(
@@ -164,11 +185,11 @@ function tableEvidence(table: HTMLElement): string {
       if (row === header && cells.every((cell) => cell.tagName === "TH"))
         return `Column headings: ${headers.join("; ")}.`;
       return `${cells
-          .map(
-            (cell, i) =>
-              `${complex ? `Cell ${i + 1}` : (headers[i] ?? `Column ${i + 1}`)}: ${cell.textContent?.trim() || "blank"}`,
-          )
-          .join("; ")}.`;
+        .map(
+          (cell, i) =>
+            `${complex ? `Cell ${i + 1}` : (headers[i] ?? `Column ${i + 1}`)}: ${cellText(cell) || "blank"}`,
+        )
+        .join("; ")}.`;
     })
     .join("\n");
   return `Table${caption ? `: ${caption}` : ""}. ${complex ? "This table has grouped or merged cells; the following is a row-by-row reading, not a complete account of its header relationships. " : ""}\n${detail}\nEnd of table.`;
@@ -216,7 +237,7 @@ export function narrationEntries(
     else {
       const clone = element.cloneNode(true) as HTMLElement;
       for (const image of clone.querySelectorAll<HTMLElement>("img"))
-        image.replaceWith(imageEvidence(image));
+        image.replaceWith(` ${imageEvidence(image)} `);
       spoken = spokenBlock(clone);
       if (spoken) {
         const item = element.closest("li");

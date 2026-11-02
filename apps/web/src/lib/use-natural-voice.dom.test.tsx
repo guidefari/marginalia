@@ -1187,6 +1187,16 @@ describe("an ended event that is already queued when Pause runs", () => {
 });
 
 describe("a keyless reader who started before the capabilities loaded", () => {
+  it("uses the device-only code notice for ChatGPT-plan-only readers", async () => {
+    query.value = { providers: ["chatgpt"] };
+    window.sessionStorage.setItem("marginalia.listenVoice", "device");
+    mountArticle(["<code>if (ok) return false;</code>"], ["pre"]);
+    await act(async () => root.render(<Harness />));
+    await start(0);
+    expect(speak).toHaveBeenCalledOnce();
+    expect(speak.mock.calls[0][0].text).toContain("needs an AI provider key");
+    expect(speak.mock.calls[0][0].text).not.toContain("if (ok)");
+  });
   it("clears a paused capability wait when seeking after the providers arrive", async () => {
     query.value = undefined;
     window.sessionStorage.setItem("marginalia.listenVoice", "device");

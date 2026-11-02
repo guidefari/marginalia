@@ -109,7 +109,7 @@ export function createFollower(onChange: () => void): Follower {
   let recheckPending = false;
   let observer: ResizeObserver | undefined;
   let visual: VisualViewport | null | undefined;
-  let lastY = window.scrollY;
+  let lastY = 0;
   let geometry: number[] = [];
   let layoutUntil = 0;
   let inputUntil = 0;
@@ -159,8 +159,8 @@ export function createFollower(onChange: () => void): Follower {
     const y = window.scrollY;
     const moved = y !== lastY;
     lastY = y;
-    const layout = layoutChanged();
     if (!following) return;
+    const layout = layoutChanged();
     if (!moved) {
       if (layout) onLayout();
       return;
@@ -252,6 +252,23 @@ export function createFollower(onChange: () => void): Follower {
     if (document.visibilityState !== "hidden") onLayout();
   };
   const onInput = (event: Event) => {
+    // Input inside a contained scroller must not claim an unrelated player frame.
+    if (event.target instanceof Element) {
+      let element: Element | null = event.target;
+      while (
+        element &&
+        element !== document.body &&
+        element !== document.documentElement
+      ) {
+        const style = getComputedStyle(element);
+        if (
+          /(auto|scroll)/.test(style.overflowY) &&
+          element.scrollHeight > element.clientHeight
+        )
+          return;
+        element = element.parentElement;
+      }
+    }
     // Native scrollbar presses target the root, unlike clicks in the article
     // or a contained settings scroller.
     if (

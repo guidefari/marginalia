@@ -14,6 +14,14 @@ const edit = (original: string, replacement: string) => ({
 });
 
 describe("narration contract", () => {
+  it.each([
+    "She said [laughs] fine.",
+    "[Music] follows (sighs).",
+  ])("reads source stage cues as words, not voice instructions: %s", (text) => {
+    const source = narrationSource(text, "prose");
+    expect(validateNarration(source, { edits: [] }, "prose")).toBe(source);
+    expect(source).not.toMatch(/[[\]()]/);
+  });
   it("keeps every untouched prose/heading/list character, including negation", () => {
     for (const kind of ["prose", "heading", "list"] as const) {
       const source = "Dr. Reed will not accept -2.50%, e.g. yesterday.";
@@ -235,6 +243,22 @@ describe("narration contract", () => {
         "code",
       ),
     ).toContain("returns -3.050.");
+  });
+
+  it("ignores quoted numbers and negations in JS comments while retaining comment-like string literals", () => {
+    const source =
+      '// "old" was 99, not current\nconst label = "https://x.test/12"; /* "other" 77 */';
+    const codeExplanation = 'Assign the string "https://x.test/12" to label.';
+    expect(
+      validateNarration(source, { edits: [], codeExplanation }, "code"),
+    ).toContain(codeExplanation);
+    expect(() =>
+      validateNarration(
+        source,
+        { edits: [], codeExplanation: codeExplanation.replace("/12", "/13") },
+        "code",
+      ),
+    ).toThrow();
   });
 
   it.each([

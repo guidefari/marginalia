@@ -60,6 +60,23 @@ async function fixture(key = true) {
 }
 
 describe("narration.prepare", () => {
+  it("maps a fixed refused-key sentence to actionable copy without exposing upstream details", async () => {
+    const f = await fixture();
+    model.generate.mockRejectedValueOnce(
+      new ConvexError(
+        "OpenRouter didn't accept your saved key. Update it in Your account.",
+      ),
+    );
+    await expect(f.call()).rejects.toThrow(
+      "Your AI provider didn't accept your saved key",
+    );
+    model.generate.mockRejectedValueOnce(
+      new ConvexError(
+        "OpenRouter didn't accept your saved key. Update it in Your account. private-token",
+      ),
+    );
+    await expect(f.call()).rejects.toThrow(RETRY);
+  });
   it("returns validated spoken text/version with the reader's bounded Quick chain", async () => {
     const f = await fixture();
     model.generate.mockResolvedValueOnce({

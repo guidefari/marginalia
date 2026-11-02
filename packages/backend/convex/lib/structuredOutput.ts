@@ -23,7 +23,7 @@ function providerWire(
         visit(value),
       ]),
     );
-    // Nullable optional fields become required on OpenAI's strict wire schema.
+    // OpenAI's strict wire schema requires every property, including locally optional fields.
     if (provider === "openai") wire.required = Object.keys(wire.properties);
   }
   if (wire.items)

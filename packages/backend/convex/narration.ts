@@ -22,6 +22,8 @@ const PLAN =
   "Listening preparation needs a capped AI model. Choose an API-key model for Quick tasks in Your account, then Retry.";
 const KEY =
   "Listening preparation needs your own AI provider key. Add one in Your account, then Retry.";
+const REFUSED_KEY =
+  "Your AI provider didn't accept your saved key. Update it in Your account, then Retry.";
 
 export const prepare = action({
   args: {
@@ -84,6 +86,14 @@ export const prepare = action({
     } catch (error) {
       // Only our fixed reader sentences may escape; upstream errors can contain
       // prompts, model prose and credentials. No raw-error/prose logging.
+      if (
+        error instanceof ConvexError &&
+        typeof error.data === "string" &&
+        /^(?:OpenRouter|OpenAI|Anthropic) didn't accept your saved key\. Update it in Your account\.$/.test(
+          error.data,
+        )
+      )
+        throw new ConvexError(REFUSED_KEY);
       if (
         error instanceof ConvexError &&
         (error.data === PLAN || error.data === KEY)

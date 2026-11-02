@@ -8,7 +8,7 @@ export interface QueueItem {
   /** Headings are followed by the longer pause. */
   heading: boolean;
   kind?: SpokenBlock["kind"];
-  /** Source-relative bounds, independent of rewritten speech. */
+  /** Fractions of this block's spoken parts; within-block following is an estimate. */
   sourceStart: number;
   sourceEnd: number;
 }
