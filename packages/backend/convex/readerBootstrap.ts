@@ -14,6 +14,11 @@ export const get = query({
     const doc = await ownedArticle(ctx, args.articleId, ctx.readerId);
     if (!doc) return null;
     const article = readerArticle(doc);
+    const source = doc.feedId ? await ctx.db.get(doc.feedId) : null;
+    const feed =
+      source?.userId === ctx.readerId
+        ? { _id: source._id, title: source.title, isActive: source.isActive }
+        : null;
     // Resolve the calendar before the first checkpoint, not when coverage prepares later.
     const settings = await ctx.db
       .query("userSettings")
@@ -23,6 +28,7 @@ export const get = query({
     if (doc.bookUnitCount === undefined)
       return {
         article,
+        feed,
         readingTimeZone,
         isBook: false,
         unitIndex: null,
@@ -55,6 +61,7 @@ export const get = query({
       )
       .unique();
     return {
+      feed,
       readingTimeZone,
       article: unit
         ? {

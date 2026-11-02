@@ -10,6 +10,7 @@ const OPEN_OVERLAY = [
   "[role=menu]",
   "[role=listbox]",
   "[role=dialog]",
+  "[data-reader-overlay]",
   "dialog[open]",
   "[aria-modal='true']",
   "[data-radix-popper-content-wrapper]",

@@ -10,6 +10,7 @@ import {
   NotebookPen,
   RotateCcw,
 } from "lucide-react";
+import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -45,6 +46,7 @@ import {
 } from "@/components/reader-opening";
 import { ReaderPane } from "@/components/reader-pane";
 import { ReaderReturnChip } from "@/components/reader-return-chip";
+import { ReaderSource } from "@/components/reader-source";
 import { ReaderToolbar } from "@/components/reader-toolbar";
 import {
   ScriptureStudyContent,
@@ -152,6 +154,8 @@ export default function ReadPage() {
   const {
     article,
     sourceArticle,
+    feed,
+    missingArticle,
     readingTimeZone,
     bibleDisplay,
     isBook,
@@ -1341,6 +1345,20 @@ export default function ReadPage() {
   );
 
   if (!article) {
+    if (missingArticle)
+      return (
+        <main className="mx-auto max-w-3xl px-6 pt-24 font-sans">
+          <p className="text-[var(--reader-fg)]">
+            This article is no longer in your library.
+          </p>
+          <Link
+            href={back.href}
+            className="mt-3 inline-flex min-h-11 items-center text-sm underline underline-offset-4"
+          >
+            Back to {back.label}
+          </Link>
+        </main>
+      );
     if (bibleDisplay?.error)
       return (
         <main className="mx-auto max-w-3xl px-6 pt-24">
@@ -1773,6 +1791,7 @@ export default function ReadPage() {
                   ? ` · About ${formatPages(estimatedPageWords)} estimated pages`
                   : ""}
               </p>
+              {feed && <ReaderSource key={feed._id} feed={feed} />}
               {(pageSource.message || pageTrackingUnavailable) && (
                 <p
                   className="mt-2 font-sans text-xs text-[var(--ink-muted)]"

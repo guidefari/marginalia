@@ -21,9 +21,11 @@ const alsoInReader = (n: number) =>
 export function RemoveFeedConfirm({
   feed,
   onClose,
+  onRemovingChange,
 }: {
   feed: { _id: Id<"feeds">; title: string };
   onClose: () => void;
+  onRemovingChange?: (removing: boolean) => void;
 }) {
   const preview = useQuery(api.feeds.removalPreview, { feedId: feed._id });
   const removeFeed = useMutation(api.feeds.remove);
@@ -58,6 +60,7 @@ export function RemoveFeedConfirm({
 
   const confirm = async () => {
     setRemoving(true);
+    onRemovingChange?.(true);
     setError("");
     try {
       await removeFeed({ feedId: feed._id, articles: choice });
@@ -70,6 +73,8 @@ export function RemoveFeedConfirm({
     } catch {
       setError("Couldn't remove the feed. Try again.");
       setRemoving(false);
+    } finally {
+      onRemovingChange?.(false);
     }
   };
 

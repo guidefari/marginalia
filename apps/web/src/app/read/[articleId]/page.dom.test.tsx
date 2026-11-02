@@ -70,6 +70,13 @@ const state = vi.hoisted(() => ({
   pages: [] as { name: string; args: unknown }[],
   params: "",
   scopeReady: true,
+  missingArticle: false,
+  // SAFETY: tests assign only the bootstrap source shape; null means no subscription.
+  feed: null as {
+    _id: string;
+    title: string;
+    isActive: boolean;
+  } | null,
   more: false,
   landed: false,
   marginMode: "sidenotes",
@@ -138,24 +145,26 @@ const article = {
 };
 vi.mock("@/lib/use-book-reading", () => ({
   useReadable: () => ({
-    article: state.licensed
-      ? {
-          ...article,
-          title: "Psalms 23",
-          content: "Licensed-display-canary",
-          contentHtml: "<p>Licensed-display-canary</p>",
-        }
-      : state.bible
+    article: state.missingArticle
+      ? null
+      : state.licensed
         ? {
             ...article,
-            _id: "article-1",
-            bible: {
-              reference: "Psalms 23",
-              translation: "web",
-              copyright: "Public domain",
-            },
+            title: "Psalms 23",
+            content: "Licensed-display-canary",
+            contentHtml: "<p>Licensed-display-canary</p>",
           }
-        : article,
+        : state.bible
+          ? {
+              ...article,
+              _id: "article-1",
+              bible: {
+                reference: "Psalms 23",
+                translation: "web",
+                copyright: "Public domain",
+              },
+            }
+          : article,
     sourceArticle: state.licensed
       ? {
           ...article,
@@ -173,6 +182,8 @@ vi.mock("@/lib/use-book-reading", () => ({
     isBook: false,
     unitIndex: null,
     scopeReady: state.scopeReady,
+    feed: state.feed,
+    missingArticle: state.missingArticle,
   }),
   useBookProgress: () => {},
 }));
@@ -374,6 +385,8 @@ beforeEach(() => {
   state.pages = [];
   state.params = "";
   state.scopeReady = true;
+  state.feed = null;
+  state.missingArticle = false;
   state.more = false;
   state.landed = false;
   state.marginMode = "sidenotes";
@@ -407,6 +420,48 @@ beforeEach(() => {
   document.body.innerHTML = '<div id="root"></div>';
   root = createRoot(document.getElementById("root")!);
 });
+
+it("shows the subscribed source and confirmation in the article header", async () => {
+  state.feed = { _id: "feed-1", title: "The Weekly Letter", isActive: true };
+  await act(async () => root.render(<ReadPage />));
+  const header = document.querySelector("article header")!;
+  expect(header.textContent).toContain("From The Weekly Letter");
+  const unsubscribe = header.querySelector<HTMLButtonElement>(
+    'button[aria-label="Unsubscribe from The Weekly Letter"]',
+  )!;
+  await act(async () => unsubscribe.click());
+  expect(header.textContent).toContain("Remove this feed?");
+  expect(header.textContent).toContain(
+    "Articles with your highlights or notes stay.",
+  );
+  await act(async () =>
+    unsubscribe.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    ),
+  );
+  expect(state.push).not.toHaveBeenCalled();
+  expect(header.textContent).not.toContain("Remove this feed?");
+
+  // The live bootstrap no longer offers unsubscribe after the source is gone.
+  state.feed = null;
+  await act(async () => root.render(<ReadPage />));
+  expect(header.textContent).not.toContain("Unsubscribe");
+  expect(document.querySelector("h1")?.textContent).toBe("Invented article");
+});
+
+it("offers a way back if source removal deletes the article being read", async () => {
+  await act(async () => root.render(<ReadPage />));
+  state.missingArticle = true;
+  await act(async () => root.render(<ReadPage />));
+  expect(document.body.textContent).toContain(
+    "This article is no longer in your library.",
+  );
+  expect(document.querySelector("main a")?.textContent).toMatch(/^Back to /);
+  expect(
+    document.querySelector('[data-testid="reader-body-skeleton"]'),
+  ).toBeNull();
+});
+
 it("binds Bible summaries to the saved WEB source even when it has no HTML", async () => {
   state.licensed = true;
   await act(async () => root.render(<ReadPage />));
