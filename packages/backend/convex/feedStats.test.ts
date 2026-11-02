@@ -1,11 +1,13 @@
 /// <reference types="vite/client" />
 import { describe, expect, it, vi } from "vitest";
+import { ReadingClock } from "../../../apps/web/src/lib/reading-clock";
 import { secondReaderTest } from "../test/owner";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { countFeedOutcome } from "./feedStats";
 import { metadataTriggers } from "./lib/metadataTriggers";
+import { pageSourceKey } from "./lib/readingPages";
 
 const modules = import.meta.glob("./**/*.ts");
 const OWNER = "default_user";
@@ -63,6 +65,109 @@ const finish = async (t: Fixture["t"]) => {
 };
 
 describe("per-feed outcome counts", () => {
+  it("records one human visit/open when coverage attaches after a startup checkpoint across account midnight", async () => {
+    const start = Date.parse("2026-11-02T04:59:58Z");
+    const now = vi.spyOn(Date, "now").mockReturnValue(start);
+    try {
+      const { t, owner } = await secondReaderTest(modules);
+      const { feedId, articleId } = await t.run((ctx) =>
+        feedWithArticle(ctx, OWNER, "late-pages"),
+      );
+      const content = Array.from({ length: 320 }, () => "word").join(" ");
+      await t.run((ctx) =>
+        ctx.db.patch(articleId, { content, wordCount: 320 }),
+      );
+      await owner.mutation(api.readingPages.initializeDay, {
+        timeZone: "America/New_York",
+      });
+      const bootstrap = await owner.query(api.readerBootstrap.get, {
+        articleId,
+      });
+      expect(bootstrap?.readingTimeZone).toBe("America/New_York");
+      const clock = new ReadingClock(
+        start,
+        0,
+        true,
+        bootstrap?.readingTimeZone,
+      );
+      clock.paragraphs([1], start, 0);
+      const visitId = "170d1ba0-28c2-44b1-9d97-c9f9bc9e944e";
+      const startup = clock.snapshots(start, 0)[0];
+      const input = (sample: typeof startup) => ({
+        ...sample,
+        articleId,
+        visitId,
+      });
+      await owner.mutation(api.sessions.recordInteraction, {
+        articleId,
+        action: "opened",
+      });
+      await owner.mutation(api.readingActivity.checkpoint, input(startup));
+      now.mockReturnValue(start + 1000);
+      clock.heartbeat(start + 1000, 1000);
+      const source = await owner.mutation(api.readingPages.prepareSource, {
+        articleId,
+        sourceKey: pageSourceKey(content),
+        paragraphWords: [160, 160],
+        timeZone: "UTC",
+      });
+      if (!("sourceId" in source) || !source.sourceId)
+        throw new Error("Missing coverage source");
+      expect(clock.configurePages(source)).toBe(true);
+      clock.pages?.view([0]);
+      for (let tick = 2000; tick <= 5000; tick += 1000)
+        clock.heartbeat(start + tick, tick);
+      now.mockReturnValue(start + 5000);
+      clock.acknowledge(startup); // Late startup acknowledgement must not drop the newer closed-day state.
+      const late = clock.snapshots(start + 5000, 5000);
+      expect(late.map((sample) => sample.day)).toEqual([
+        "2026-11-01",
+        "2026-11-02",
+      ]);
+      for (const sample of [late[1], startup, late[0], late[1], late[0]])
+        await owner.mutation(api.readingActivity.checkpoint, input(sample));
+      const visits = await t.run((ctx) =>
+        ctx.db
+          .query("readingActivity")
+          .withIndex("by_user_article", (q) =>
+            q.eq("userId", OWNER).eq("articleId", articleId),
+          )
+          .take(5),
+      );
+      expect(visits).toHaveLength(2); // Two dates, one actual visit.
+      expect(new Set(visits.map((row) => row.visitId)).size).toBe(1);
+      expect(visits.reduce((total, row) => total + row.activeTimeMs, 0)).toBe(
+        5000,
+      );
+      const opened = await t.run((ctx) =>
+        ctx.db
+          .query("articleInteractions")
+          .withIndex("by_user_article_action", (q) =>
+            q
+              .eq("userId", OWNER)
+              .eq("articleId", articleId)
+              .eq("action", "opened"),
+          )
+          .take(5),
+      );
+      expect(opened.filter((row) => row.visitId === visitId)).toHaveLength(1);
+      expect((await stats(t))[0]).toMatchObject({ feedId, opened: 1 });
+      expect(
+        await t.run((ctx) => ctx.db.query("feedOpenCounts").first()),
+      ).toMatchObject({ desk: 1, visit: 1 });
+      const days = await t.run((ctx) =>
+        ctx.db
+          .query("readingPageDays")
+          .withIndex("by_userId_and_day", (q) => q.eq("userId", OWNER))
+          .take(5),
+      );
+      expect(days.find((row) => row.day === "2026-11-02")?.creditedWords).toBe(
+        8,
+      );
+    } finally {
+      now.mockRestore();
+    }
+  });
   it("counts offered, opened, finished and skipped as they happen, and nothing else", async () => {
     const { t, owner } = await secondReaderTest(modules);
     const { feedId, articleId } = await t.run((ctx) =>

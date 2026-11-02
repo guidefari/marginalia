@@ -1,4 +1,7 @@
+import type { PageCredit } from "@marginalia/backend/reading-activity";
 import { capDwell } from "@marginalia/backend/reading-activity";
+import { dayKey, startOfLocalDay } from "@marginalia/backend/reading-pages";
+import { PageCoverageClock, type PageCoverageConfig } from "./page-coverage";
 
 export const READING_IDLE_MS = 90_000;
 export interface ReadingSample {
@@ -19,6 +22,7 @@ export interface ReadingSample {
 }
 export type ReadingSnapshot = Omit<ReadingSample, "dwell" | "dwellPending"> & {
   dwell?: Record<string, number>;
+  pageCredit?: PageCredit;
 };
 export function articleProgress(
   top: number,
@@ -33,10 +37,6 @@ export function articleProgress(
     Math.min(100, Math.max(0, ((header - top) / (height - available)) * 100)),
   );
 }
-function localDay(at: number) {
-  const d = new Date(at);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 export class ReadingClock {
   private samples = new Map<string, ReadingSample>();
   private lastAt: number;
@@ -44,8 +44,32 @@ export class ReadingClock {
   private lastActivity: number;
   private visible: boolean;
   private listening = false;
+  private pageVisible = true;
   private inView: readonly number[] = [];
-  constructor(at: number, tick: number, visible: boolean) {
+  pages: PageCoverageClock | null = null;
+  pageTrackingActive = false;
+  private readonly timeZone: string;
+  /** Attach/pause coverage without changing already queued visit/day identities. */
+  configurePages(config?: PageCoverageConfig) {
+    this.pageTrackingActive = false;
+    this.pages?.view([]);
+    if (!config || config.timeZone !== this.timeZone) return false;
+    if (!this.pages) this.pages = new PageCoverageClock(config);
+    if (
+      this.pages.config.sourceId !== config.sourceId ||
+      JSON.stringify(this.pages.config.paragraphWords) !==
+        JSON.stringify(config.paragraphWords)
+    )
+      return false;
+    this.pageTrackingActive = true;
+    return true;
+  }
+  private day(at: number) {
+    return dayKey(at, this.timeZone);
+  }
+  constructor(at: number, tick: number, visible: boolean, timeZone?: string) {
+    this.timeZone =
+      timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     this.lastAt = at;
     this.lastTick = tick;
     this.lastActivity = tick;
@@ -53,7 +77,7 @@ export class ReadingClock {
     this.sample(at);
   }
   private sample(at: number) {
-    const day = localDay(at);
+    const day = this.day(at);
     let s = this.samples.get(day);
     if (!s) {
       s = {
@@ -88,14 +112,19 @@ export class ReadingClock {
     let from = this.lastAt;
     const totalWall = Math.max(0, at - from);
     while (from < at) {
-      const midnight = new Date(from);
-      midnight.setHours(24, 0, 0, 0);
-      const end = Math.min(at, midnight.getTime());
+      const boundary = startOfLocalDay(
+        Date.parse(`${this.day(from)}T12:00:00Z`) + 12 * 60 * 60 * 1000,
+        this.timeZone,
+      );
+      const end = Math.min(at, boundary);
       const s = this.sample(from);
       const share = totalWall ? (end - from) / totalWall : 0;
       s.timeSpentMs += end - from;
       s.visibleTimeMs += visible * share;
       s.activeTimeMs += active * share;
+      // Audio can keep the legacy clock active, but does not qualify visible text.
+      if (!this.listening && this.pageVisible && this.pageTrackingActive)
+        this.pages?.credit(active * share, s.day);
       // Dwell takes the active share, so it stops when the tab is hidden, the
       // window loses focus or the reader goes idle, exactly as active time does.
       // It is only totalled here; the paragraphs are credited by `creditDwell`.
@@ -137,6 +166,12 @@ export class ReadingClock {
     this.tick(at, tick);
     this.listening = listening;
   }
+  /** Open reading panes may cover the prose while legacy activity still counts. */
+  pageVisibility(visible: boolean, at: number, tick: number) {
+    if (!visible) this.pageVisible = false;
+    this.tick(at, tick);
+    this.pageVisible = visible;
+  }
   /** Sets which paragraphs are on screen; time up to now goes to the previous set. */
   paragraphs(inView: readonly number[], at: number, tick: number) {
     this.heartbeat(at, tick);
@@ -162,13 +197,16 @@ export class ReadingClock {
         ...s,
         annotationsOpened: [...s.annotationsOpened],
         dwell: capDwell(dwell),
+        pageCredit: this.pages?.snapshot(s.day),
       }),
     );
   }
   /** Prune only a closed day whose complete cumulative state was delivered. */
   acknowledge(sent: ReadingSnapshot) {
+    if (sent.pageCredit) this.pages?.acknowledge(sent.day, sent.pageCredit);
     const sample = this.samples.get(sent.day);
-    if (!sample || sent.day === localDay(this.lastAt)) return;
+    if (!sample || sent.day === this.day(this.lastAt)) return;
+    const pageCredit = this.pages?.snapshot(sent.day);
     const annotations = new Set(sent.annotationsOpened);
     if (
       sample.startedAt !== sent.startedAt ||
@@ -179,6 +217,8 @@ export class ReadingClock {
       sample.maxScrollPercent > sent.maxScrollPercent ||
       sample.paragraphIndex !== sent.paragraphIndex ||
       sample.annotationsOpened.some((id) => !annotations.has(id)) ||
+      (pageCredit !== undefined &&
+        pageCredit.coverage !== sent.pageCredit?.coverage) ||
       sample.dwellPending > 0 ||
       Object.entries(capDwell(sample.dwell) ?? {}).some(
         ([key, ms]) => ms > (sent.dwell?.[key] ?? 0),
@@ -186,5 +226,6 @@ export class ReadingClock {
     )
       return;
     this.samples.delete(sent.day);
+    this.pages?.forgetDay(sent.day);
   }
 }

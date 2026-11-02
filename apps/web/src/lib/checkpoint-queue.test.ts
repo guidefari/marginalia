@@ -134,6 +134,7 @@ it("merges queued dwell by the larger reading per paragraph and keeps it until a
   expect(acknowledgeCheckpoint([merged], merged)).toEqual([]);
 });
 it("still parses and merges checkpoints from before dwell existed", () => {
+  expect(parseCheckpoints("corrupt legacy storage")).toEqual([]);
   const queue = parseCheckpoints(JSON.stringify([snapshot]));
   expect(queue).toEqual([snapshot]);
   expect(mergeCheckpoint(queue, snapshot)[0].dwell).toBeUndefined();
@@ -145,4 +146,28 @@ it("keeps the paragraph of the furthest queued scroll", () => {
   expect(mergeCheckpoint([ahead], behind)[0].paragraphIndex).toBe(31);
   const further = { ...snapshot, maxScrollPercent: 90, paragraphIndex: 40 };
   expect(mergeCheckpoint([ahead], further)[0].paragraphIndex).toBe(40);
+});
+it("unions page coverage across stale checkpoints and preserves it through legacy deliveries", () => {
+  const first = {
+    ...snapshot,
+    pageCredit: {
+      sourceId: "source",
+      coverage: "1",
+      visualTimeMs: 3000,
+      timeZone: "UTC",
+      goalWords: 3000,
+    },
+  };
+  const later = {
+    ...first,
+    pageCredit: { ...first.pageCredit, coverage: "3", visualTimeMs: 6000 },
+  };
+  const [merged] = mergeCheckpoint([later], first);
+  expect(merged.pageCredit).toEqual(later.pageCredit);
+  expect(mergeCheckpoint([merged], snapshot)[0].pageCredit).toEqual(
+    later.pageCredit,
+  );
+  expect(acknowledgeCheckpoint([merged], first)).toEqual([merged]);
+  expect(acknowledgeCheckpoint([merged], snapshot)).toEqual([merged]);
+  expect(acknowledgeCheckpoint([merged], later)).toEqual([]);
 });

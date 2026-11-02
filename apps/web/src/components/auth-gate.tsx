@@ -13,6 +13,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { LegalFooter } from "@/components/legal-footer";
+import { PageGoalCelebration } from "@/components/page-goal";
 import { ReaderOpening } from "@/components/reader-opening";
 import { SourceLink } from "@/components/source-link";
 import { authClient } from "@/lib/auth-client";
@@ -138,7 +139,13 @@ function ReaderAccessGate({ children }: { children: ReactNode }) {
         )}
       </div>
     );
-  if (isAuthenticated && reader) return children;
+  if (isAuthenticated && reader)
+    return (
+      <>
+        {children}
+        <PageGoalCelebration />
+      </>
+    );
   if (isAuthenticated)
     return (
       <main className="auth-screen">

@@ -1,9 +1,11 @@
 "use client";
 import { api } from "@marginalia/backend/convex/_generated/api";
 import type { ReadingCheckpoint } from "@marginalia/backend/reading-activity";
+import { dayKey } from "@marginalia/backend/reading-pages";
 import { useMutation } from "convex/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { drainCheckpoints, queueCheckpoints } from "./checkpoint-queue";
+import { type PageCoverageConfig, visiblePageCells } from "./page-coverage";
 import { observeParagraphsInView } from "./paragraph-dwell";
 import {
   observeParagraphGeometry,
@@ -22,6 +24,8 @@ export function useEngagementTracker({
   containerRef,
   listening,
   paragraphVersion = 0,
+  pageSource,
+  timeZone,
 }: {
   articleId: string;
   sessionId: string | null;
@@ -31,15 +35,23 @@ export function useEngagementTracker({
   containerRef: React.RefObject<HTMLElement | null>;
   listening: boolean;
   paragraphVersion?: number;
+  pageSource?: PageCoverageConfig;
+  timeZone?: string;
 }) {
   const checkpoint = useMutation(api.readingActivity.checkpoint);
   const clockRef = useRef<ReadingClock | null>(null);
   const flushRef = useRef<((finish?: boolean) => Promise<void>) | null>(null);
   const [saveError, setSaveError] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [pendingPageWords, setPendingPageWords] = useState(0);
+  const [pageTrackingUnavailable, setPageTrackingUnavailable] = useState(false);
   // Attribution can resolve late without replacing the clock or crediting elapsed time twice.
   const attribution = useRef({ sessionId, sessionKey, requestedMinutes });
   const speech = useRef(listening);
+  const pageConfig = useRef({ pageSource, timeZone });
+  useEffect(() => {
+    pageConfig.current = { pageSource, timeZone };
+  }, [pageSource, timeZone]);
   useEffect(() => {
     attribution.current = { sessionId, sessionKey, requestedMinutes };
     speech.current = listening;
@@ -50,9 +62,21 @@ export function useEngagementTracker({
       Date.now(),
       performance.now(),
       !document.hidden && document.hasFocus(),
+      pageConfig.current.timeZone ?? pageConfig.current.pageSource?.timeZone,
     );
+    clock.configurePages(pageConfig.current.pageSource);
     clockRef.current = clock;
     clock.speech(speech.current, Date.now(), performance.now());
+    const pageVisibility = () =>
+      clock.pageVisibility(
+        !document.documentElement.hasAttribute("data-notes-open") &&
+          !document.documentElement.hasAttribute("data-reader-pane") &&
+          !document.querySelector(
+            "dialog[open], [role='dialog'][data-state='open']",
+          ),
+        Date.now(),
+        performance.now(),
+      );
     const visitId = crypto.randomUUID();
     let finished = false;
     let finishRequested = false;
@@ -75,22 +99,33 @@ export function useEngagementTracker({
         ]);
         // A shared drain can also deliver other visits' durable backlog. Only
         // this visit's successful delivery may prune its clock, never a timeout.
-        if (snapshot.visitId === visitId && snapshot.articleId === articleId)
+        if (snapshot.visitId === visitId && snapshot.articleId === articleId) {
           clock.acknowledge(snapshot);
+          if (mounted && clock.pages)
+            setPendingPageWords(
+              clock.pages.pending(
+                dayKey(Date.now(), clock.pages.config.timeZone),
+              ),
+            );
+        }
       } finally {
         clearTimeout(timer);
       }
     };
-    const samples = (finish = false): ReadingCheckpoint[] =>
-      clock.snapshots(Date.now(), performance.now()).map((s, i, all) => ({
-        ...s,
-        articleId,
-        sessionId: identity.sessionId ?? undefined,
-        sessionKey: identity.sessionKey ?? undefined,
-        requestedMinutes: identity.requestedMinutes,
-        visitId,
-        finished: (finish || finishRequested) && i === all.length - 1,
-      }));
+    const samples = (finish = false): ReadingCheckpoint[] => {
+      pageVisibility();
+      return clock
+        .snapshots(Date.now(), performance.now())
+        .map((s, i, all) => ({
+          ...s,
+          articleId,
+          sessionId: identity.sessionId ?? undefined,
+          sessionKey: identity.sessionKey ?? undefined,
+          requestedMinutes: identity.requestedMinutes,
+          visitId,
+          finished: (finish || finishRequested) && i === all.length - 1,
+        }));
+    };
     const flush = (finish = false): Promise<void> => {
       if (finished) return Promise.resolve();
       // Periodic signals coalesce. Done never joins a non-finishing snapshot:
@@ -121,10 +156,21 @@ export function useEngagementTracker({
       return work;
     };
     flushRef.current = flush;
-    const active = () => clock.activity(Date.now(), performance.now());
+    const active = () => {
+      pageVisibility();
+      clock.activity(Date.now(), performance.now());
+    };
     const measure = () => {
       const geometry = paragraphGeometry(containerRef.current);
       if (!geometry) return;
+      if (clock.pages && clock.pageTrackingActive)
+        clock.pages.view(
+          visiblePageCells(
+            geometry.rects,
+            clock.pages.config.paragraphWords,
+            window.innerHeight,
+          ),
+        );
       const p = articleProgress(
         geometry.body.top,
         geometry.body.height,
@@ -175,13 +221,18 @@ export function useEngagementTracker({
     document.addEventListener("visibilitychange", visibility);
     window.addEventListener("pagehide", leave);
     window.addEventListener("online", backgroundFlush);
-    const tick = window.setInterval(
-      () => clock.heartbeat(Date.now(), performance.now()),
-      1000,
-    );
+    const tick = window.setInterval(() => {
+      pageVisibility();
+      clock.heartbeat(Date.now(), performance.now());
+      if (clock.pages)
+        setPendingPageWords(
+          clock.pages.pending(dayKey(Date.now(), clock.pages.config.timeZone)),
+        );
+    }, 1000);
     const save = window.setInterval(backgroundFlush, 15_000);
     return () => {
       mounted = false;
+      clock.configurePages(undefined);
       if (!finished) {
         queueCheckpoints(samples());
         if (navigator.onLine !== false && !document.hidden)
@@ -204,7 +255,31 @@ export function useEngagementTracker({
       window.removeEventListener("online", backgroundFlush);
     };
   }, [ready, articleId, sessionKey, containerRef, checkpoint]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: prose epochs replace observed elements, not clocks
+  // biome-ignore lint/correctness/useExhaustiveDependencies: article/prose epochs revalidate coverage without replacing the visit clock
+  useEffect(() => {
+    const clock = clockRef.current;
+    if (!clock) return;
+    // Invalidate before ticking: a changed DOM must not spend the old manifest's allowance.
+    clock.configurePages(undefined);
+    clock.heartbeat(Date.now(), performance.now());
+    const attached = clock.configurePages(pageSource);
+    setPageTrackingUnavailable(Boolean(pageSource && !attached));
+    setPendingPageWords(
+      clock.pages
+        ? clock.pages.pending(dayKey(Date.now(), clock.pages.config.timeZone))
+        : 0,
+    );
+    const geometry = paragraphGeometry(containerRef.current);
+    if (geometry && pageSource && attached)
+      clock.pages?.view(
+        visiblePageCells(
+          geometry.rects,
+          pageSource.paragraphWords,
+          window.innerHeight,
+        ),
+      );
+  }, [pageSource, ready, articleId, containerRef, paragraphVersion]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: prose epochs replace observed elements, never the visit clock
   useEffect(() => {
     const body = ready ? getArticleBody(containerRef.current) : null;
     const clock = clockRef.current;
@@ -214,6 +289,7 @@ export function useEngagementTracker({
     );
     return () => {
       stop();
+      clock.configurePages(undefined);
       clock.paragraphs([], Date.now(), performance.now());
     };
   }, [ready, articleId, sessionKey, containerRef, paragraphVersion]);
@@ -230,5 +306,13 @@ export function useEngagementTracker({
   const retry = useCallback(async () => {
     await flushRef.current?.();
   }, []);
-  return { trackAnnotationOpen, finish, retry, saveError, progress };
+  return {
+    trackAnnotationOpen,
+    finish,
+    retry,
+    saveError,
+    progress,
+    pendingPageWords,
+    pageTrackingUnavailable,
+  };
 }

@@ -87,6 +87,23 @@ async function seedLibrary(ctx: MutationCtx, userId: string, copies = 1) {
       createdAt: now,
     });
     lastArticle = articleId;
+    await ctx.db.insert("readingPageSources", {
+      userId,
+      articleId,
+      sourceKey: "fixture",
+      method: "visible-cells-v1",
+      wordCount: 8,
+      paragraphWords: [8],
+      coverage: "1",
+      creditedWords: 8,
+    });
+    await ctx.db.insert("readingPageDays", {
+      userId,
+      day: `2026-10-${String(i + 1).padStart(2, "0")}`,
+      timeZone: "UTC",
+      creditedWords: 8,
+      goalWords: 3000,
+    });
     await ctx.db.insert("manualAnnotationState", {
       userId,
       articleId,

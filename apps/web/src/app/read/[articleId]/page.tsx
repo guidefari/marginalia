@@ -1,6 +1,7 @@
 "use client";
 import { api } from "@marginalia/backend/convex/_generated/api";
 import type { Id } from "@marginalia/backend/convex/_generated/dataModel";
+import { formatPages } from "@marginalia/backend/reading-pages";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   Check,
@@ -34,6 +35,7 @@ import {
   NoteUnfold,
 } from "@/components/note-unfold";
 import { NotesPanel } from "@/components/notes-panel";
+import { ReaderPageGoal } from "@/components/page-goal";
 import { ReaderLinkMenu } from "@/components/reader-link-menu";
 import { ReaderMap } from "@/components/reader-map";
 import {
@@ -115,6 +117,7 @@ import {
   useSetMarkDefault,
 } from "@/lib/use-mark-default";
 import { useMarkPaint } from "@/lib/use-mark-paint";
+import { usePageSource } from "@/lib/use-page-source";
 import { useParagraphReturn } from "@/lib/use-paragraph-return";
 import { usePlaceRestore } from "@/lib/use-place-restore";
 import { openAfterLanding, useQuoteLanding } from "@/lib/use-quote-landing";
@@ -149,6 +152,7 @@ export default function ReadPage() {
   const {
     article,
     sourceArticle,
+    readingTimeZone,
     bibleDisplay,
     isBook,
     unitIndex,
@@ -488,12 +492,27 @@ export default function ReadPage() {
         }
       : undefined,
   );
+  const pageSource = usePageSource({
+    articleId: articleKey,
+    content: sourceArticle?.content,
+    contentHtml: sourceArticle?.contentHtml,
+    isBook,
+    version: paragraphs.version,
+    containerRef: articleRef,
+  });
+  const estimatedPageWords =
+    pageSource.config?.paragraphWords.reduce(
+      (total, words) => total + words,
+      0,
+    ) ?? article?.wordCount;
   const {
     trackAnnotationOpen,
     finish,
     retry,
     saveError,
     progress: scrollPercent,
+    pendingPageWords,
+    pageTrackingUnavailable,
   } = useEngagementTracker({
     articleId,
     sessionId,
@@ -505,6 +524,8 @@ export default function ReadPage() {
     containerRef: articleRef,
     listening: listen.active,
     paragraphVersion: paragraphs.version,
+    pageSource: pageSource.config,
+    timeZone: readingTimeZone,
   });
   useBookProgress(
     articleKey,
@@ -1428,6 +1449,12 @@ export default function ReadPage() {
       />
 
       <ReaderToolbar
+        pageGoal={
+          <ReaderPageGoal
+            pendingWords={pendingPageWords}
+            savingError={saveError}
+          />
+        }
         tools={
           article.bible ? (
             <BibleReaderTools
@@ -1742,7 +1769,31 @@ export default function ReadPage() {
                       ? { index: unitIndex, of: outline.length }
                       : undefined,
                 })}
+                {!isBook && estimatedPageWords != null
+                  ? ` · About ${formatPages(estimatedPageWords)} estimated pages`
+                  : ""}
               </p>
+              {(pageSource.message || pageTrackingUnavailable) && (
+                <p
+                  className="mt-2 font-sans text-xs text-[var(--ink-muted)]"
+                  role={pageSource.failed ? "status" : undefined}
+                >
+                  {pageSource.message ??
+                    "Estimated pages are paused for this source or timezone. Reopen the article to retry."}
+                  {pageSource.failed && (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        className="underline"
+                        onClick={pageSource.retry}
+                      >
+                        Retry
+                      </button>
+                    </>
+                  )}
+                </p>
+              )}
               <ArticleTags articleId={articleId as any} />
               {impression && <ImpressionSummary impression={impression} />}
             </header>

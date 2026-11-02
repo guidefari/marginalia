@@ -22,6 +22,7 @@ import {
 } from "./lib/readingActivity";
 import { initializeEmptyResume, mergeResume } from "./lib/readingResume";
 import { ensureReadingSession } from "./lib/readingSession";
+import { savePageCredit } from "./readingPages";
 import { updateQueueStats } from "./readingQueue";
 import { queueTasteRefresh } from "./taste";
 
@@ -43,6 +44,15 @@ const args = {
   finished: v.optional(v.boolean()),
   // Cumulative milliseconds per displayed paragraph number
   dwell: v.optional(v.record(v.string(), v.number())),
+  pageCredit: v.optional(
+    v.object({
+      sourceId: v.string(),
+      coverage: v.string(),
+      visualTimeMs: v.number(),
+      timeZone: v.string(),
+      goalWords: v.union(v.number(), v.null()),
+    }),
+  ),
 };
 
 async function saveCheckpoint(
@@ -176,6 +186,13 @@ async function saveCheckpoint(
     annotationsOpened,
     finishedAt: old?.finishedAt ?? (finishing ? s.updatedAt : undefined),
     estimatedReadMinutes: article.estimatedReadMinutes,
+    pageCredit: await savePageCredit(
+      ctx,
+      userId,
+      article,
+      { ...s, activeTimeMs },
+      old?.pageCredit,
+    ),
   };
   if (old) await ctx.db.patch(old._id, data);
   else await ctx.db.insert("readingActivity", data);

@@ -22,8 +22,12 @@ it("preserves authoritative saved text/HTML while excluding vectors and operatio
       createdAt: Date.now(),
     }),
   );
+  await f.owner.mutation(api.readingPages.initializeDay, {
+    timeZone: "America/New_York",
+  });
   const lean = await f.owner.query(api.readerBootstrap.get, { articleId });
   expect(lean).toMatchObject({
+    readingTimeZone: "America/New_York",
     isBook: false,
     unitIndex: null,
     article: {
