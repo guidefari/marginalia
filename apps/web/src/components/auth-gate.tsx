@@ -605,7 +605,7 @@ export function RequestAccess({ onBack }: { onBack: () => void }) {
         )}
       </div>
       <SourceLink className="mt-10" />
-      <LegalFooter />
+      <LegalFooter openInNewTab />
     </main>
   );
 }

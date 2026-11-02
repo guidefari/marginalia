@@ -232,6 +232,36 @@ describe("sign-in focus transitions", () => {
   });
 
   it.each([
+    "/privacy",
+    "/terms",
+  ])("opens %s separately from the access-request draft", async (href) => {
+    await act(async () => root.render(<AuthGate>desk</AuthGate>));
+    await activate("Request access");
+    const link = document.querySelector<HTMLAnchorElement>(
+      `nav[aria-label="Legal"] a[href="${href}"]`,
+    )!;
+    expect(link.target).toBe("_blank");
+    expect(link.relList.contains("noopener")).toBe(true);
+    expect(link.relList.contains("noreferrer")).toBe(true);
+    expect(link.textContent).toContain("(new tab)");
+    expect(state.mutate).not.toHaveBeenCalled();
+  });
+
+  it("keeps sign-in legal links in the current tab", async () => {
+    await act(async () => root.render(<AuthGate>desk</AuthGate>));
+    const links = [
+      ...document.querySelectorAll<HTMLAnchorElement>(
+        'nav[aria-label="Legal"] a',
+      ),
+    ];
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link.target).toBe("");
+      expect(link.textContent).not.toContain("(new tab)");
+    }
+  });
+
+  it.each([
     ["invite", "name"],
     ["setup", "email"],
   ])("focuses the first field for a %s link", async (token, field) => {
