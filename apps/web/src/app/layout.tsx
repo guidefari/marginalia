@@ -12,6 +12,7 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { InteractionFeedback } from "@/components/interaction-feedback";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import { PageGoalCelebration } from "@/components/page-goal";
 import { PwaRuntime } from "@/components/pwa-runtime";
 import { ReaderRoomMemory } from "@/components/reader-room-memory";
 import { ConvexClientProvider } from "@/lib/convex";
@@ -129,6 +130,7 @@ export default function RootLayout({
                 {children}
               </div>
               <Toaster position="bottom-center" />
+              <PageGoalCelebration />
               <KeyboardShortcuts />
             </ConvexClientProvider>
           </AltHintProvider>

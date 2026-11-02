@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 
 import type { ReadingCheckpoint } from "@marginalia/backend/reading-activity";
+import { cellWeights, coverageWords } from "@marginalia/backend/reading-pages";
 import { act, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AnswerUnfold } from "@/components/note-unfold";
+import type { PageCoverageConfig } from "./page-coverage";
 import { useParagraphs } from "./paragraphs";
 import { useEngagementTracker } from "./use-engagement-tracker";
 
@@ -42,10 +44,12 @@ function Reader({
   articleId,
   sessionId = null,
   sessionKey,
+  pageSource,
 }: {
   articleId: string;
   sessionId?: string | null;
   sessionKey?: string;
+  pageSource?: PageCoverageConfig;
 }) {
   const ref = useRef<HTMLElement>(null);
   const { version } = useParagraphs(ref, true);
@@ -58,6 +62,7 @@ function Reader({
     containerRef: ref,
     listening: false,
     paragraphVersion: version,
+    pageSource,
   });
   return (
     <>
@@ -132,6 +137,73 @@ afterEach(async () => {
 });
 
 describe("paragraph dwell in the reader", () => {
+  it("reattaches legacy paragraph dwell when source preparation replaces the startup clock", async () => {
+    await act(async () => root.render(<Reader articleId="hydrated-pages" />));
+    await advance(100);
+    const previous = live()[0];
+    previous.show(1);
+    await advance(2000);
+    const pageSource = {
+      sourceId: "source",
+      coverage: "0",
+      paragraphWords: [5, 5, 5],
+      timeZone: "UTC",
+      goalWords: 3000,
+    };
+    await act(async () =>
+      root.render(
+        <Reader articleId="hydrated-pages" pageSource={pageSource} />,
+      ),
+    );
+    await advance(100);
+    expect(previous.disconnected).toBe(true);
+    live()[0].show(1);
+    await advance(2000);
+    await act(async () => tracker.retry());
+    expect(
+      checkpoint.mock.calls.at(-1)?.[0].dwell?.["1"],
+    ).toBeGreaterThanOrEqual(1000);
+  });
+  it("saves stationary first-screen fractional pages through the existing checkpoint without Done or scroll", async () => {
+    vi.setSystemTime(new Date("2026-11-02T12:00:00Z"));
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        const index = Number(this.dataset.para ?? 0);
+        return {
+          top: 100 + index * 70,
+          bottom: 150 + index * 70,
+          height: 50,
+          left: 0,
+          right: 300,
+          width: 300,
+          x: 0,
+          y: 0,
+          toJSON() {},
+        };
+      },
+    );
+    const pageSource = {
+      sourceId: "source",
+      coverage: "0",
+      paragraphWords: [5, 5, 5],
+      timeZone: "UTC",
+      goalWords: 3000,
+    };
+    await act(async () =>
+      root.render(<Reader articleId="pages" pageSource={pageSource} />),
+    );
+    await advance(100);
+    await act(async () => window.dispatchEvent(new Event("resize")));
+    await advance(5000);
+    checkpoint.mockClear();
+    await act(async () => tracker.retry());
+    const page = checkpoint.mock.calls.at(-1)?.[0];
+    expect(page?.finished).toBe(false);
+    expect(
+      coverageWords(page?.pageCredit?.coverage ?? "", cellWeights([5, 5, 5])),
+    ).toBe(15);
+    expect(tracker.pendingPageWords).toBe(0);
+  });
   it("does not resend an acknowledged prior day on the next flush, while current-day progress remains cumulative", async () => {
     vi.setSystemTime(new Date(2026, 9, 12, 23, 59, 58));
     await act(async () => root.render(<Reader articleId="a" />));

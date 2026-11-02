@@ -119,6 +119,18 @@ function authRows(
 
 /** Every table that holds a library's rows, then its reader and auth records. */
 const STEPS: Step[] = [
+  rows((ctx, u) =>
+    ctx.db
+      .query("readingPageSources")
+      .withIndex("by_userId_and_articleId", (q) => q.eq("userId", u))
+      .take(BATCH),
+  ),
+  rows((ctx, u) =>
+    ctx.db
+      .query("readingPageDays")
+      .withIndex("by_userId_and_day", (q) => q.eq("userId", u))
+      .take(BATCH),
+  ),
   // First, so a job already in flight finds its claim gone and writes nothing
   // (bookIndex.ts also refuses writes for a reader being deleted)
   rows((ctx, u) =>

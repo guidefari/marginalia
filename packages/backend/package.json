@@ -12,6 +12,7 @@
     "./scripture-study": "./convex/lib/scriptureStudy.ts",
     "./scripture-references": "./convex/lib/scriptureReferences.ts",
     "./reading-activity": "./convex/lib/readingActivity.ts",
+    "./reading-pages": "./convex/lib/readingPages.ts",
     "./library-search": "./convex/lib/librarySearch.ts",
     "./local-context": "./convex/lib/localContext.ts",
     "./prepared-representation": "./convex/lib/preparedRepresentation.ts",

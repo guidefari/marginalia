@@ -9,6 +9,7 @@ import {
   type RoomPeriod,
   readingSentence,
 } from "@/lib/reading-sentence";
+import { PageGoalTracker } from "../page-goal";
 import { ArticleEngagement } from "./article-engagement";
 import { HowYouRead } from "./how-you-read";
 import { ShortAndLong } from "./short-and-long";
@@ -19,7 +20,7 @@ import { WhenYouRead } from "./when-you-read";
 import { WhereYouLinger } from "./where-you-linger";
 import { YourSources } from "./your-sources";
 
-/** A mirror of how the reader reads: one sentence, then the pictures. No goals or streaks. */
+/** A mirror of reading, with an optional estimated-page goal; no streaks or nudges. */
 export function StatsTab() {
   const [period, setPeriod] = useState<RoomPeriod>("month");
   const [timeZone] = useState(
@@ -55,6 +56,9 @@ export function StatsTab() {
 
   return (
     <div>
+      <PageGoalTracker
+        days={period === "90days" ? 90 : period === "30days" ? 30 : "month"}
+      />
       <div className="mb-8 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         {room ? (
           <p className="max-w-[860px] font-serif text-[clamp(1.5rem,3vw,2.125rem)] font-light leading-snug">

@@ -1135,10 +1135,39 @@ export default defineSchema({
     // Copied from the article when the visit is recorded, so statistics can
     // tell a short read from a long one without reading the article
     estimatedReadMinutes: v.optional(v.number()),
+    pageCredit: v.optional(
+      v.object({
+        sourceId: v.string(),
+        coverage: v.string(),
+        visualTimeMs: v.number(),
+        timeZone: v.string(),
+        goalWords: v.union(v.number(), v.null()),
+      }),
+    ),
   })
     .index("by_user_visit_day", ["userId", "visitId", "day"])
     .index("by_user_started", ["userId", "startedAt"])
     .index("by_user_article", ["userId", "articleId"]),
+
+  readingPageSources: defineTable({
+    userId: v.string(),
+    articleId: v.id("articles"),
+    sourceKey: v.string(),
+    method: v.literal("visible-cells-v1"),
+    wordCount: v.number(),
+    paragraphWords: v.array(v.number()),
+    coverage: v.string(),
+    creditedWords: v.number(),
+  }).index("by_userId_and_articleId", ["userId", "articleId"]),
+  readingPageDays: defineTable({
+    userId: v.string(),
+    day: v.string(),
+    timeZone: v.string(),
+    creditedWords: v.number(),
+    goalWords: v.union(v.number(), v.null()),
+    achievedAt: v.optional(v.number()),
+    presentedAt: v.optional(v.number()),
+  }).index("by_userId_and_day", ["userId", "day"]),
 
   // One small cumulative Continue row per reader/article, not an event window.
   readingResumes: defineTable({
@@ -1768,6 +1797,13 @@ export default defineSchema({
   // One row per user. Model IDs are validated against the reader's available
   // models in lib/providers.ts; older rows hold bare OpenRouter IDs.
   userSettings: defineTable({
+    pageTimeZone: v.optional(v.string()),
+    pagesTrackedFrom: v.optional(v.string()),
+    pageGoalVisible: v.optional(v.boolean()),
+    pageGoalWords: v.optional(v.union(v.number(), v.null())),
+    pendingPageGoalWords: v.optional(v.union(v.number(), v.null())),
+    pendingPageGoalDay: v.optional(v.string()),
+    pageGoalEverEnabled: v.optional(v.boolean()),
     manualAnnotationModelRevision: v.optional(v.number()),
     userId: v.string(),
     annotationModel: v.optional(v.string()),

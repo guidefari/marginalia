@@ -38,6 +38,7 @@ function Kbd({ children }: { children: string }) {
 
 export interface ReaderToolbarProps {
   tools?: ReactNode;
+  pageGoal?: ReactNode;
   title: string;
   /** The article's own heading. Once it scrolls away, the bar shows `title` in its middle slot. */
   headingElement: HTMLElement | null;
@@ -88,6 +89,7 @@ export function ReaderToolbar({
   onReannotate,
   settings,
   tools,
+  pageGoal,
 }: ReaderToolbarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
@@ -131,13 +133,16 @@ export function ReaderToolbar({
             <span className="hidden sm:inline">{backLabel}</span>
           </Link>
 
-          <span
-            data-testid="reader-toolbar-title"
-            data-shown={headingAway}
-            aria-hidden="true"
-            className="reader-toolbar-title flex-1 min-w-0 truncate px-3 font-sans text-sm text-[var(--ink-soft)]"
-          >
-            {compactTitle}
+          <span className="flex-1 min-w-0 px-3">
+            <span
+              data-testid="reader-toolbar-title"
+              data-shown={headingAway}
+              aria-hidden="true"
+              className="reader-toolbar-title block min-w-0 truncate font-sans text-sm text-[var(--ink-soft)]"
+            >
+              {compactTitle}
+            </span>
+            {pageGoal}
           </span>
 
           <div className="flex items-center gap-0.5">

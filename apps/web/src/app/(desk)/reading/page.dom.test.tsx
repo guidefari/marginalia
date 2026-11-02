@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
   tab: null as string | null,
   todays: [] as (string | undefined)[],
   room: undefined as unknown,
+  // SAFETY: this query slot is owned entirely by the fixed fixtures below, never external input.
+  pageOverview: undefined as unknown,
+  // SAFETY: this empty test capture receives only the typed optional numeric query argument.
+  pageDays: [] as (number | undefined)[],
   topics: undefined as unknown,
   habits: undefined as unknown,
   linger: undefined as unknown,
@@ -29,9 +33,11 @@ vi.mock("convex/react", () => ({
       query?: string;
       letter?: string;
       wordKey?: string;
+      days?: number;
     },
   ) => {
     if (ref === "room") mocks.todays.push(args?.today);
+    if (ref === "pageOverview") mocks.pageDays.push(args?.days);
     const rows = mocks.lookups.results;
     const keys = [...new Set(rows.map((r) => r.wordKey))].sort();
     const letterOf = (key: string) =>
@@ -87,6 +93,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@marginalia/backend/convex/_generated/api", () => ({
   api: {
     stats: { readingRoom: "room", readingTopics: "topics" },
+    readingPages: { overview: "pageOverview", setGoal: "setPageGoal" },
     readingHabits: { readingHabits: "habits", readingLinger: "linger" },
     dictionary: {
       page: "page",
@@ -145,6 +152,8 @@ beforeEach(() => {
   mocks.tab = null;
   mocks.todays = [];
   mocks.room = undefined;
+  mocks.pageOverview = undefined;
+  mocks.pageDays = [];
   mocks.topics = undefined;
   mocks.habits = undefined;
   mocks.linger = undefined;
@@ -163,6 +172,29 @@ afterEach(async () => {
 const render = () => act(async () => root.render(<ReadingPage />));
 
 describe("Your reading", () => {
+  it("shows the independent estimated-page ledger high in Stats and follows the selected period", async () => {
+    mocks.room = room();
+    mocks.pageOverview = {
+      today: "2026-11-02",
+      timeZone: "UTC",
+      trackedFrom: "2026-11-02",
+      visible: true,
+      goalWords: 3000,
+      history: [{ day: "2026-11-02", creditedWords: 150, goalWords: 3000 }],
+    };
+    await render();
+    expect(container.textContent).toContain("0.5 of 10 pages today");
+    expect(container.textContent).toContain("Not tracked");
+    expect(mocks.pageDays).toContain(31);
+    const select = container.querySelector("select");
+    if (!select) throw new Error("Missing Stats period");
+    await act(async () => {
+      select.value = "90days";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(mocks.pageDays.at(-1)).toBe(90);
+    expect(container.querySelectorAll("ol li")).toHaveLength(90);
+  });
   it("opens on the stats with one sentence and tabs that carry the tab in the URL", async () => {
     mocks.room = room();
     mocks.topics = [];

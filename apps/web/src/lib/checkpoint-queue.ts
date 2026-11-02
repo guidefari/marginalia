@@ -1,12 +1,18 @@
 import {
   furthestParagraph,
   mergeDwell,
+  mergePageCredit,
   type ReadingCheckpoint,
   readingCheckpointSchema,
 } from "@marginalia/backend/reading-activity";
 
 export function parseCheckpoints(raw: string | null): ReadingCheckpoint[] {
-  const value: unknown = JSON.parse(raw ?? "[]");
+  let value: unknown;
+  try {
+    value = JSON.parse(raw ?? "[]");
+  } catch {
+    return [];
+  }
   return Array.isArray(value)
     ? value.flatMap((entry) => {
         const parsed = readingCheckpointSchema.safeParse(entry);
@@ -45,6 +51,7 @@ export function mergeCheckpoint(
         ].slice(0, 128),
         finished: old.finished || snapshot.finished,
         dwell: mergeDwell(old.dwell, snapshot.dwell),
+        pageCredit: mergePageCredit(old.pageCredit, snapshot.pageCredit),
       }
     : snapshot;
   return [
@@ -77,21 +84,30 @@ export function acknowledgeCheckpoint(
         (id) => !sent.annotationsOpened.includes(id),
       ) ||
       dwellAhead(entry.dwell, sent.dwell) ||
+      (entry.pageCredit !== undefined &&
+        (sent.pageCredit?.sourceId !== entry.pageCredit.sourceId ||
+          mergePageCredit(entry.pageCredit, sent.pageCredit)?.coverage !==
+            sent.pageCredit.coverage ||
+          entry.pageCredit.visualTimeMs > sent.pageCredit.visualTimeMs)) ||
       (entry.finished && !sent.finished),
   );
 }
 
-const QUEUE_KEY = "marginalia-reading-checkpoints-v1";
+// V2 prevents a stale V1 tab from stripping new optional coverage while draining.
+const QUEUE_KEY = "marginalia-reading-checkpoints-v2";
 let fallback: ReadingCheckpoint[] = [];
 let tail: Promise<void> = Promise.resolve();
 let priorityPending = 0;
 
 function readQueue() {
   try {
-    return parseCheckpoints(localStorage.getItem(QUEUE_KEY)).reduce(
-      mergeCheckpoint,
-      fallback,
+    const legacy = parseCheckpoints(
+      localStorage.getItem("marginalia-reading-checkpoints-v1"),
     );
+    return [
+      ...legacy,
+      ...parseCheckpoints(localStorage.getItem(QUEUE_KEY)),
+    ].reduce(mergeCheckpoint, fallback);
   } catch {
     return fallback;
   }
@@ -133,8 +149,26 @@ export function drainCheckpoints(
           acknowledged.push(entry);
         }
       } finally {
-        if (acknowledged.length)
+        if (acknowledged.length) {
           writeQueue(acknowledged.reduce(acknowledgeCheckpoint, readQueue()));
+          try {
+            const legacy = localStorage.getItem(
+              "marginalia-reading-checkpoints-v1",
+            );
+            if (legacy)
+              localStorage.setItem(
+                "marginalia-reading-checkpoints-v1",
+                JSON.stringify(
+                  acknowledged.reduce(
+                    acknowledgeCheckpoint,
+                    parseCheckpoints(legacy),
+                  ),
+                ),
+              );
+          } catch {
+            /* The V2 in-memory queue still retains unsent work. */
+          }
+        }
       }
     });
   const settled = run.finally(() => {

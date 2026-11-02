@@ -1,4 +1,34 @@
 import { z } from "zod";
+import { MAX_PAGE_CELLS, unionCoverage } from "./readingPages";
+
+export const pageCreditSchema = z.object({
+  sourceId: z.string().min(1).max(100),
+  coverage: z
+    .string()
+    .regex(/^[0-9a-f]*$/)
+    .max(Math.ceil(MAX_PAGE_CELLS / 4)),
+  visualTimeMs: z
+    .number()
+    .finite()
+    .min(0)
+    .max(26 * 60 * 60 * 1000),
+  timeZone: z.string().min(1).max(100),
+  goalWords: z.number().int().min(300).max(300_000).nullable(),
+});
+export type PageCredit = z.infer<typeof pageCreditSchema>;
+export function mergePageCredit(
+  old: PageCredit | undefined,
+  next: PageCredit | undefined,
+): PageCredit | undefined {
+  if (!old) return next;
+  if (!next || next.sourceId !== old.sourceId || next.timeZone !== old.timeZone)
+    return old;
+  return {
+    ...old,
+    coverage: unionCoverage(old.coverage, next.coverage),
+    visualTimeMs: Math.max(old.visualTimeMs, next.visualTimeMs),
+  };
+}
 
 const DURATION_MAX_MS = 26 * 60 * 60 * 1000;
 const duration = z.number().finite().min(0).max(DURATION_MAX_MS);
@@ -73,6 +103,7 @@ export const readingCheckpointSchema = z
     finished: z.boolean().optional(),
     // A malformed map costs only the dwell; the rest of the checkpoint is kept.
     dwell: z.record(z.string(), z.number()).optional().catch(undefined),
+    pageCredit: pageCreditSchema.optional().catch(undefined),
   })
   .refine(
     (s) =>
