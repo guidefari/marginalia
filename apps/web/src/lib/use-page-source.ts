@@ -25,6 +25,7 @@ export function usePageSource({
   const prepare = useMutation(api.readingPages.prepareSource);
   const [result, setResult] = useState<{
     key: string;
+    version: number;
     config?: PageCoverageConfig;
     message?: string;
     failed?: boolean;
@@ -39,6 +40,7 @@ export function usePageSource({
     if (!geometry?.elements.length) {
       setResult({
         key,
+        version,
         message: "Estimated pages are unavailable for this text.",
       });
       return;
@@ -55,13 +57,14 @@ export function usePageSource({
       .then((value) => {
         if (disposed) return;
         if ("unavailable" in value)
-          setResult({ key, message: value.unavailable });
-        else setResult({ key, config: value });
+          setResult({ key, version, message: value.unavailable });
+        else setResult({ key, version, config: value });
       })
       .catch(() => {
         if (!disposed)
           setResult({
             key,
+            version,
             message: "Estimated pages could not start.",
             failed: true,
           });
@@ -80,7 +83,10 @@ export function usePageSource({
     key,
     retry,
   ]);
-  const current = result?.key === key ? result : undefined;
+  const current =
+    !isBook && result?.key === key && result.version === version
+      ? result
+      : undefined;
   return {
     config: current?.config,
     message: isBook

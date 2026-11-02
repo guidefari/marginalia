@@ -37,10 +37,6 @@ export function articleProgress(
     Math.min(100, Math.max(0, ((header - top) / (height - available)) * 100)),
   );
 }
-function localDay(at: number) {
-  const d = new Date(at);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 export class ReadingClock {
   private samples = new Map<string, ReadingSample>();
   private lastAt: number;
@@ -51,17 +47,29 @@ export class ReadingClock {
   private pageVisible = true;
   private inView: readonly number[] = [];
   pages: PageCoverageClock | null = null;
-  private timeZone: string | undefined;
-  configurePages(config: PageCoverageConfig) {
-    if (this.pages?.config.sourceId === config.sourceId) return;
-    this.timeZone = config.timeZone;
-    this.pages = new PageCoverageClock(config);
+  pageTrackingActive = false;
+  private readonly timeZone: string;
+  /** Attach/pause coverage without changing already queued visit/day identities. */
+  configurePages(config?: PageCoverageConfig) {
+    this.pageTrackingActive = false;
+    this.pages?.view([]);
+    if (!config || config.timeZone !== this.timeZone) return false;
+    if (!this.pages) this.pages = new PageCoverageClock(config);
+    if (
+      this.pages.config.sourceId !== config.sourceId ||
+      JSON.stringify(this.pages.config.paragraphWords) !==
+        JSON.stringify(config.paragraphWords)
+    )
+      return false;
+    this.pageTrackingActive = true;
+    return true;
   }
   private day(at: number) {
-    return this.timeZone ? dayKey(at, this.timeZone) : localDay(at);
+    return dayKey(at, this.timeZone);
   }
   constructor(at: number, tick: number, visible: boolean, timeZone?: string) {
-    this.timeZone = timeZone;
+    this.timeZone =
+      timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     this.lastAt = at;
     this.lastTick = tick;
     this.lastActivity = tick;
@@ -104,14 +112,10 @@ export class ReadingClock {
     let from = this.lastAt;
     const totalWall = Math.max(0, at - from);
     while (from < at) {
-      const midnight = new Date(from);
-      midnight.setHours(24, 0, 0, 0);
-      const boundary = this.timeZone
-        ? startOfLocalDay(
-            Date.parse(`${this.day(from)}T12:00:00Z`) + 12 * 60 * 60 * 1000,
-            this.timeZone,
-          )
-        : midnight.getTime();
+      const boundary = startOfLocalDay(
+        Date.parse(`${this.day(from)}T12:00:00Z`) + 12 * 60 * 60 * 1000,
+        this.timeZone,
+      );
       const end = Math.min(at, boundary);
       const s = this.sample(from);
       const share = totalWall ? (end - from) / totalWall : 0;
@@ -119,7 +123,7 @@ export class ReadingClock {
       s.visibleTimeMs += visible * share;
       s.activeTimeMs += active * share;
       // Audio can keep the legacy clock active, but does not qualify visible text.
-      if (!this.listening && this.pageVisible)
+      if (!this.listening && this.pageVisible && this.pageTrackingActive)
         this.pages?.credit(active * share, s.day);
       // Dwell takes the active share, so it stops when the tab is hidden, the
       // window loses focus or the reader goes idle, exactly as active time does.

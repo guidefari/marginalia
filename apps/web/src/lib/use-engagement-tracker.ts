@@ -25,6 +25,7 @@ export function useEngagementTracker({
   listening,
   paragraphVersion = 0,
   pageSource,
+  timeZone,
 }: {
   articleId: string;
   sessionId: string | null;
@@ -35,6 +36,7 @@ export function useEngagementTracker({
   listening: boolean;
   paragraphVersion?: number;
   pageSource?: PageCoverageConfig;
+  timeZone?: string;
 }) {
   const checkpoint = useMutation(api.readingActivity.checkpoint);
   const clockRef = useRef<ReadingClock | null>(null);
@@ -42,29 +44,27 @@ export function useEngagementTracker({
   const [saveError, setSaveError] = useState(false);
   const [progress, setProgress] = useState(0);
   const [pendingPageWords, setPendingPageWords] = useState(0);
+  const [pageTrackingUnavailable, setPageTrackingUnavailable] = useState(false);
   // Attribution can resolve late without replacing the clock or crediting elapsed time twice.
   const attribution = useRef({ sessionId, sessionKey, requestedMinutes });
   const speech = useRef(listening);
-  const pageConfig = useRef(pageSource);
+  const pageConfig = useRef({ pageSource, timeZone });
   useEffect(() => {
-    pageConfig.current = pageSource;
-  }, [pageSource]);
-  const pageSourceId = pageSource?.sourceId;
-  const pageTimeZone = pageSource?.timeZone;
+    pageConfig.current = { pageSource, timeZone };
+  }, [pageSource, timeZone]);
   useEffect(() => {
     attribution.current = { sessionId, sessionKey, requestedMinutes };
     speech.current = listening;
   }, [sessionId, sessionKey, requestedMinutes, listening]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: source identity starts a new visit after the legacy-only startup clock
   useEffect(() => {
     if (!ready) return;
     const clock = new ReadingClock(
       Date.now(),
       performance.now(),
       !document.hidden && document.hasFocus(),
-      pageTimeZone,
+      pageConfig.current.timeZone ?? pageConfig.current.pageSource?.timeZone,
     );
-    if (pageConfig.current) clock.configurePages(pageConfig.current);
+    clock.configurePages(pageConfig.current.pageSource);
     clockRef.current = clock;
     clock.speech(speech.current, Date.now(), performance.now());
     const pageVisibility = () =>
@@ -163,7 +163,7 @@ export function useEngagementTracker({
     const measure = () => {
       const geometry = paragraphGeometry(containerRef.current);
       if (!geometry) return;
-      if (clock.pages)
+      if (clock.pages && clock.pageTrackingActive)
         clock.pages.view(
           visiblePageCells(
             geometry.rects,
@@ -232,6 +232,7 @@ export function useEngagementTracker({
     const save = window.setInterval(backgroundFlush, 15_000);
     return () => {
       mounted = false;
+      clock.configurePages(undefined);
       if (!finished) {
         queueCheckpoints(samples());
         if (navigator.onLine !== false && !document.hidden)
@@ -253,23 +254,23 @@ export function useEngagementTracker({
       window.removeEventListener("pagehide", leave);
       window.removeEventListener("online", backgroundFlush);
     };
-  }, [
-    ready,
-    articleId,
-    sessionKey,
-    containerRef,
-    checkpoint,
-    pageSourceId,
-    pageTimeZone,
-  ]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: ready/article changes replace the clock even when the source object is stable
+  }, [ready, articleId, sessionKey, containerRef, checkpoint]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: article/prose epochs revalidate coverage without replacing the visit clock
   useEffect(() => {
     const clock = clockRef.current;
-    if (!clock || !pageSource) return;
+    if (!clock) return;
+    // Invalidate before ticking: a changed DOM must not spend the old manifest's allowance.
+    clock.configurePages(undefined);
     clock.heartbeat(Date.now(), performance.now());
-    clock.configurePages(pageSource);
+    const attached = clock.configurePages(pageSource);
+    setPageTrackingUnavailable(Boolean(pageSource && !attached));
+    setPendingPageWords(
+      clock.pages
+        ? clock.pages.pending(dayKey(Date.now(), clock.pages.config.timeZone))
+        : 0,
+    );
     const geometry = paragraphGeometry(containerRef.current);
-    if (geometry)
+    if (geometry && pageSource && attached)
       clock.pages?.view(
         visiblePageCells(
           geometry.rects,
@@ -277,8 +278,8 @@ export function useEngagementTracker({
           window.innerHeight,
         ),
       );
-  }, [pageSource, ready, articleId, containerRef]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: prose epochs replace elements; source epochs replace clocks
+  }, [pageSource, ready, articleId, containerRef, paragraphVersion]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: prose epochs replace observed elements, never the visit clock
   useEffect(() => {
     const body = ready ? getArticleBody(containerRef.current) : null;
     const clock = clockRef.current;
@@ -288,17 +289,10 @@ export function useEngagementTracker({
     );
     return () => {
       stop();
+      clock.configurePages(undefined);
       clock.paragraphs([], Date.now(), performance.now());
     };
-  }, [
-    ready,
-    articleId,
-    sessionKey,
-    containerRef,
-    paragraphVersion,
-    pageSourceId,
-    pageTimeZone,
-  ]);
+  }, [ready, articleId, sessionKey, containerRef, paragraphVersion]);
   useEffect(() => {
     clockRef.current?.speech(listening, Date.now(), performance.now());
   }, [listening]);
@@ -319,5 +313,6 @@ export function useEngagementTracker({
     saveError,
     progress,
     pendingPageWords,
+    pageTrackingUnavailable,
   };
 }

@@ -3,6 +3,30 @@ import { articleProgress, ReadingClock } from "./reading-clock";
 
 const start = new Date(2026, 9, 12, 12).getTime();
 describe("recorded reading time", () => {
+  it("never rebuckets an existing sample when late page metadata has a different timezone", () => {
+    const at = Date.parse("2026-11-02T04:59:58Z");
+    const clock = new ReadingClock(at, 0, true, "UTC");
+    const startup = clock.snapshots(at, 0)[0];
+    clock.heartbeat(at + 1000, 1000);
+    expect(
+      clock.configurePages({
+        sourceId: "source",
+        coverage: "0",
+        paragraphWords: [8],
+        timeZone: "America/New_York",
+        goalWords: 3000,
+      }),
+    ).toBe(false);
+    expect(clock.snapshots(at + 2000, 2000)).toMatchObject([
+      {
+        day: "2026-11-02",
+        startedAt: startup.startedAt,
+        activeTimeMs: 2000,
+        timeSpentMs: 2000,
+      },
+    ]);
+    expect(clock.pages).toBeNull();
+  });
   it("pauses at the idle boundary and resumes only with activity", () => {
     const clock = new ReadingClock(start, 0, true);
     for (let tick = 1000; tick <= 100000; tick += 1000)

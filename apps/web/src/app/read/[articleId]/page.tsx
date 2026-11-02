@@ -152,6 +152,7 @@ export default function ReadPage() {
   const {
     article,
     sourceArticle,
+    readingTimeZone,
     bibleDisplay,
     isBook,
     unitIndex,
@@ -511,6 +512,7 @@ export default function ReadPage() {
     saveError,
     progress: scrollPercent,
     pendingPageWords,
+    pageTrackingUnavailable,
   } = useEngagementTracker({
     articleId,
     sessionId,
@@ -523,6 +525,7 @@ export default function ReadPage() {
     listening: listen.active,
     paragraphVersion: paragraphs.version,
     pageSource: pageSource.config,
+    timeZone: readingTimeZone,
   });
   useBookProgress(
     articleKey,
@@ -1770,12 +1773,13 @@ export default function ReadPage() {
                   ? ` · About ${formatPages(estimatedPageWords)} estimated pages`
                   : ""}
               </p>
-              {pageSource.message && (
+              {(pageSource.message || pageTrackingUnavailable) && (
                 <p
                   className="mt-2 font-sans text-xs text-[var(--ink-muted)]"
                   role={pageSource.failed ? "status" : undefined}
                 >
-                  {pageSource.message}
+                  {pageSource.message ??
+                    "Estimated pages are paused for this source or timezone. Reopen the article to retry."}
                   {pageSource.failed && (
                     <>
                       {" "}

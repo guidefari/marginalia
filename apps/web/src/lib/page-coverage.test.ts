@@ -76,7 +76,7 @@ describe("bounded visible-text page estimates", () => {
   });
   it("keeps page coverage separate from scroll, hidden time, idle time and listening", () => {
     const start = Date.parse("2026-11-02T12:00:00Z");
-    const clock = new ReadingClock(start, 0, true);
+    const clock = new ReadingClock(start, 0, true, config.timeZone);
     clock.configurePages(config);
     clock.pages!.view([0, 1, 2, 3]);
     clock.progress(100);
