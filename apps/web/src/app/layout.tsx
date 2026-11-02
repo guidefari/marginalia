@@ -19,23 +19,26 @@ import { AltHintProvider } from "@/lib/use-alt-hint";
 import "./globals.css";
 import "@planetaryescape/reader/reader.css";
 
-// Self-hosted by next/font: Turbopack drops remote CSS @imports, so Google
-// Fonts must not be loaded from globals.css.
+// Self-hosted by next/font: Turbopack drops remote CSS @imports. Let CSS load
+// only the faces in use, rather than preloading italic/mono fonts before auth.
 const newsreader = Newsreader({
   subsets: ["latin"],
   style: ["normal", "italic"],
   axes: ["opsz"],
   variable: "--font-newsreader",
+  preload: false,
 });
 const dmSans = DM_Sans({
   subsets: ["latin"],
   style: ["normal", "italic"],
   axes: ["opsz"],
   variable: "--font-dm-sans",
+  preload: false,
 });
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-jetbrains-mono",
+  preload: false,
 });
 // Optional reading fonts load only when chosen in the Text settings
 const literata = Literata({

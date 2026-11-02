@@ -1,5 +1,6 @@
 import { type FunctionReference, getFunctionName } from "convex/server";
-import { renderToStaticMarkup } from "react-dom/server";
+import type { ReactNode } from "react";
+import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NotesList } from "@/components/notes-list";
 import FeedsPage from "./feeds/page";
@@ -88,6 +89,12 @@ vi.mock("convex/react", () => ({
   }),
 }));
 
+async function renderReady(element: ReactNode) {
+  const stream = await renderToReadableStream(element);
+  await stream.allReady;
+  return new Response(stream).text();
+}
+
 describe("Reading desk navigation", () => {
   beforeEach(() => {
     state.notes = undefined;
@@ -100,7 +107,7 @@ describe("Reading desk navigation", () => {
     "loading",
     "empty",
     "populated",
-  ])("keeps the shared navigation and reader theme when %s", (status) => {
+  ])("keeps the shared navigation and reader theme when %s", async (status) => {
     state.notes =
       status === "loading"
         ? undefined
@@ -116,7 +123,7 @@ describe("Reading desk navigation", () => {
                 createdAt: 1700000000000,
               },
             ];
-    const html = renderToStaticMarkup(
+    const html = await renderReady(
       <DeskLayout>
         <NotesPage />
       </DeskLayout>,
@@ -142,9 +149,9 @@ describe("Reading desk navigation", () => {
     ["/notes", NotesPage],
     ["/reading", ReadingPage],
     ["/feeds", FeedsPage],
-  ] as const)("renders one shared shell around %s", (pathname, Page) => {
+  ] as const)("renders one shared shell around %s", async (pathname, Page) => {
     state.pathname = pathname;
-    const html = renderToStaticMarkup(
+    const html = await renderReady(
       <DeskLayout>
         <Page />
       </DeskLayout>,
@@ -156,8 +163,8 @@ describe("Reading desk navigation", () => {
     expect(applyTheme).toHaveBeenCalledTimes(1);
   });
 
-  it("shows four rooms and no retired links in the header", () => {
-    const html = renderToStaticMarkup(
+  it("shows four rooms and no retired links in the header", async () => {
+    const html = await renderReady(
       <DeskLayout>
         <NotesPage />
       </DeskLayout>,
@@ -176,9 +183,9 @@ describe("Reading desk navigation", () => {
   it.each([
     false,
     true,
-  ])("shows four phone slots, with Readers only in the avatar menu (owner %s)", (isOwner) => {
+  ])("shows four phone slots, with Readers only in the avatar menu (owner %s)", async (isOwner) => {
     state.isOwner = isOwner;
-    const html = renderToStaticMarkup(
+    const html = await renderReady(
       <DeskLayout>
         <NotesPage />
       </DeskLayout>,
