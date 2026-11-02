@@ -315,10 +315,15 @@ describe("sign-in focus transitions", () => {
       password ? "Use a passkey instead" : "Use email and password",
     );
     expect(toggle.disabled).toBe(true);
+    const requestAccess = button("Request access");
+    expect(requestAccess.disabled).toBe(true);
+    await act(async () => requestAccess.click());
+    expect(document.querySelector("h1")?.textContent).toBe("Your reading desk");
     await act(async () => toggle.click());
     expect(Boolean(document.querySelector("form"))).toBe(password);
     await act(async () => finish({ error: { message: "Fixture rejection" } }));
     expect(toggle.disabled).toBe(false);
+    expect(requestAccess.disabled).toBe(false);
     await activate(toggle.textContent!);
     expect(document.activeElement).toBe(
       password
