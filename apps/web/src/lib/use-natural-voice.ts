@@ -14,13 +14,27 @@ import {
   TITLE_BLOCK,
 } from "./listen-queue";
 import { getArticleBody, getParagraphs } from "./paragraphs";
-import { spokenBlock } from "./spoken-text";
+import { type NarrationEntry, narrationEntries } from "./spoken-text";
 
 /**
  * Makes one clip of speech for `text`. Convex actions can't be cancelled, so
  * `signal` only lets the player ignore a result that arrives after Stop.
  */
-export type ClipSource = (text: string, signal: AbortSignal) => Promise<Blob>;
+export type ClipSource = (
+  text: string,
+  signal: AbortSignal,
+  context?: Pick<QueueItem, "kind" | "heading">,
+) => Promise<Blob>;
+
+const readingEstimates = new WeakMap<Blob, number>();
+/** Delivery has no timestamps, but the prepared script gives a better pacing estimate. */
+export function rememberClipSpeech(blob: Blob, text: string): Blob {
+  readingEstimates.set(
+    blob,
+    Math.max(1, text.trim().split(/\s+/).length / 2.5),
+  );
+  return blob;
+}
 
 export type ListenStatus =
   | "idle"
@@ -60,6 +74,7 @@ type ClipEntry =
 
 interface PlayerEnv {
   paragraphs: () => HTMLElement[];
+  body: () => HTMLElement | null;
   clipSource: () => ClipSource;
   /** The spoken title, said before the first paragraph of a listen from the top. */
   intro: () => string | undefined;
@@ -146,6 +161,7 @@ function createPlayer(env: PlayerEnv) {
   let session = 0;
   let abort: AbortController | null = null;
   let paragraphs: HTMLElement[] = [];
+  let entries: NarrationEntry[] = [];
   let queue: QueueItem[] = [];
   const clips = new Map<number, ClipEntry>();
   let playing = -1;
@@ -177,7 +193,8 @@ function createPlayer(env: PlayerEnv) {
     status = next;
     lastError = error;
     // The title item is announced as the first paragraph, which it precedes
-    const block = queue[playing] ? Math.max(0, queue[playing].block) : null;
+    const anchor = queue[playing] ? Math.max(0, queue[playing].block) : null;
+    const block = anchor === null ? null : (entries[anchor]?.sourceIndex ?? 0);
     env.publish(
       next === "idle" || next === "finished"
         ? { status: next, index: null, error: null, following: true }
@@ -198,7 +215,7 @@ function createPlayer(env: PlayerEnv) {
       kind === "speaking" ? "data-speaking" : "data-speaking-pending",
       "",
     );
-    follower.reveal(el);
+    follower.reveal(el, queue[playing]?.sourceStart ?? 0);
   }
 
   /** The block the voice is on, which Follow brings back. */
@@ -262,8 +279,29 @@ function createPlayer(env: PlayerEnv) {
       applyRate(audio);
       audio.addEventListener("ended", onEnded);
       audio.addEventListener("error", onError);
+      audio.addEventListener("timeupdate", followProgress);
     }
     return audio;
+  }
+
+  /** Kokoro has no word timings; track the current source block proportionally. */
+  function followProgress() {
+    if (status !== "playing" || !audio) return;
+    const item = queue[playing];
+    if (!item || item.block < 0) return;
+    // Kokoro MP3 headers can report an incorrect duration. This is a reading
+    // estimate, not word alignment, and never controls audio advancement.
+    const clip = clips.get(playing);
+    const estimatedSeconds =
+      (clip?.status === "ready"
+        ? readingEstimates.get(clip.blob)
+        : undefined) ?? Math.max(1, item.text.split(/\s+/).length / 2.5);
+    const progress =
+      item.sourceStart +
+      (item.sourceEnd - item.sourceStart) *
+        Math.min(1, Math.max(0, audio.currentTime / estimatedSeconds));
+    const el = paragraphs[item.block];
+    if (el) follower.reveal(el, progress);
   }
 
   /**
@@ -309,6 +347,7 @@ function createPlayer(env: PlayerEnv) {
     heard.clear();
     queue = [];
     paragraphs = [];
+    entries = [];
     playing = -1;
     follower.stop();
     clearMarks();
@@ -324,7 +363,9 @@ function createPlayer(env: PlayerEnv) {
     // Whatever the outcome, a request that ends frees a slot, so the current run
     // plans again; otherwise a skip made while the slots were full never gets
     // its own item requested, and a restart waits on the slots the last run held
-    new Promise<Blob>((resolve) => resolve(source(queue[i].text, signal))).then(
+    new Promise<Blob>((resolve) =>
+      resolve(source(queue[i].text, signal, queue[i])),
+    ).then(
       (blob) => {
         unsettled -= 1;
         // Stop, restart or unmount ran while this was in flight: the result is
@@ -468,13 +509,30 @@ function createPlayer(env: PlayerEnv) {
       const el = ensureAudio();
       el.src = SILENT_CLIP;
       el.play().catch(() => undefined);
-      paragraphs = env.paragraphs();
+      entries = narrationEntries(env.body(), env.paragraphs());
+      paragraphs = entries.map((entry) => entry.element);
       follower.start();
       abort = new AbortController();
       planners.add(fetchAhead);
       const lang = document.documentElement.lang || "en";
-      const from = Math.max(0, block);
-      queue = buildQueue(paragraphs.map(spokenBlock), from, lang, env.intro());
+      const from =
+        block <= 0
+          ? 0
+          : entries.findIndex(
+              (entry) => (entry.sourceEndIndex ?? entry.sourceIndex) >= block,
+            );
+      if (from < 0) {
+        teardown();
+        set("finished");
+        return;
+      }
+      queue = buildQueue(
+        entries.map((entry) => entry.spoken),
+        from,
+        lang,
+        block <= 0 ? env.intro() : undefined,
+        1000,
+      );
       const first = firstItemFrom(queue, from === 0 ? TITLE_BLOCK : from);
       if (first === null) {
         teardown();
@@ -609,6 +667,7 @@ export function useNaturalVoice(
   const player = useRef<ReturnType<typeof createPlayer>>(null);
   player.current ??= createPlayer({
     paragraphs: () => getParagraphs(getArticleBody(container.current.current)),
+    body: () => getArticleBody(container.current.current),
     clipSource: () => source.current,
     intro: () => spokenIntro.current,
     speed: () => rate.current,

@@ -1,9 +1,11 @@
 "use client";
 import { api } from "@marginalia/backend/convex/_generated/api";
+import type { Id } from "@marginalia/backend/convex/_generated/dataModel";
 import { useQuery } from "convex/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDeviceVoice } from "./device-voice";
 import { clampSpeed, readSpeed, writeSpeed } from "./listen-speed";
+import { createTextPreparer } from "./narration-preparation";
 import {
   observeParagraphGeometry,
   paragraphGeometry,
@@ -124,6 +126,10 @@ export function useListen(
   const capabilities = useQuery(api.providerCredentials.capabilities, {});
   const [deviceChosen, setDeviceChosen] = useState(readDeviceChoice);
   const [choosing, setChoosing] = useState(false);
+  const [waitingDevice, setWaitingDevice] = useState<{
+    index: number;
+    paused: boolean;
+  } | null>(null);
   const pendingStart = useRef<number | null>(null);
   // One speed for both voices, kept per browser (D-TTS-010)
   const [speed, setSpeedState] = useState(readSpeed);
@@ -132,6 +138,11 @@ export function useListen(
     setSpeedState(next);
     writeSpeed(next);
   }, []);
+  const prepareDevice = useMemo(
+    () =>
+      articleId ? createTextPreparer(articleId as Id<"articles">) : undefined,
+    [articleId],
+  );
   const device = useDeviceVoice(
     containerRef,
     articleId,
@@ -139,6 +150,9 @@ export function useListen(
     content,
     contentHtml,
     speed,
+    capabilities?.providers.some((provider) => provider !== "chatgpt")
+      ? prepareDevice
+      : undefined,
   );
   const natural = useNaturalVoice(
     containerRef,
@@ -163,17 +177,24 @@ export function useListen(
   const speakFrom = useCallback(
     (start: number) => {
       pendingStart.current = start;
+      if (mode === "device" && capabilities === undefined) {
+        setWaitingDevice({ index: start, paused: false });
+        return;
+      }
       if (missingKey) {
         setChoosing(true);
         return;
       }
       setChoosing(false);
+      setWaitingDevice(null);
       speakVoice(start);
     },
-    [missingKey, speakVoice],
+    [mode, capabilities, missingKey, speakVoice],
   );
   const stop = useCallback(() => {
     setChoosing(false);
+    setWaitingDevice(null);
+    pendingStart.current = null;
     stopVoice();
   }, [stopVoice]);
 
@@ -187,7 +208,20 @@ export function useListen(
   useEffect(() => {
     pendingStart.current = null;
     setChoosing(false);
+    setWaitingDevice(null);
   }, [articleId, unitKey, content, contentHtml]);
+
+  useEffect(() => {
+    if (
+      !waitingDevice ||
+      waitingDevice.paused ||
+      capabilities === undefined ||
+      pendingStart.current !== waitingDevice.index
+    )
+      return;
+    setWaitingDevice(null);
+    device.speakFrom(waitingDevice.index);
+  }, [waitingDevice, capabilities, device.speakFrom]);
 
   const { status: naturalStatus, stop: stopNatural } = natural;
   useEffect(() => {
@@ -204,17 +238,12 @@ export function useListen(
     writeDeviceChoice();
     setDeviceChosen(true);
     setChoosing(false);
-    if (pendingStart.current !== null) device.speakFrom(pendingStart.current);
-  }, [device.speakFrom]);
-
-  const deviceIndex = device.index;
-  const deviceSpeakFrom = device.speakFrom;
-  const previous = useCallback(() => {
-    if (deviceIndex !== null) deviceSpeakFrom(Math.max(0, deviceIndex - 1));
-  }, [deviceIndex, deviceSpeakFrom]);
-  const next = useCallback(() => {
-    if (deviceIndex !== null) deviceSpeakFrom(deviceIndex + 1);
-  }, [deviceIndex, deviceSpeakFrom]);
+    if (pendingStart.current !== null) {
+      if (capabilities === undefined)
+        setWaitingDevice({ index: pendingStart.current, paused: false });
+      else device.speakFrom(pendingStart.current);
+    }
+  }, [capabilities, device.speakFrom]);
 
   if (mode === "natural") {
     return {
@@ -240,19 +269,27 @@ export function useListen(
       chooseDeviceVoice,
     };
   }
-  const status: ListenStatus = !device.active
-    ? "idle"
-    : device.paused
+  const status: ListenStatus = waitingDevice
+    ? waitingDevice.paused
       ? "paused"
-      : "playing";
+      : "preparing"
+    : !device.active
+      ? "idle"
+      : device.error
+        ? "failed"
+        : device.paused
+          ? "paused"
+          : device.preparing
+            ? "preparing"
+            : "playing";
   return {
     mode,
     supported: device.supported,
-    index: device.index,
-    paused: device.paused,
-    active: device.active,
+    index: waitingDevice?.index ?? device.index,
+    paused: waitingDevice?.paused ?? device.paused,
+    active: Boolean(waitingDevice) || device.active,
     status,
-    error: null,
+    error: device.error,
     speed,
     setSpeed,
     following: device.following,
@@ -260,11 +297,20 @@ export function useListen(
     needsKey: false,
     deviceSupported: device.supported,
     speakFrom,
-    togglePause: device.togglePause,
+    togglePause: waitingDevice
+      ? () =>
+          setWaitingDevice((waiting) =>
+            waiting ? { ...waiting, paused: !waiting.paused } : null,
+          )
+      : device.togglePause,
     stop,
-    previous,
-    next,
-    retry: () => undefined,
+    previous: waitingDevice
+      ? () => speakFrom(Math.max(0, waitingDevice.index - 1))
+      : device.previous,
+    next: waitingDevice
+      ? () => speakFrom(waitingDevice.index + 1)
+      : device.next,
+    retry: device.retry,
     chooseDeviceVoice,
   };
 }

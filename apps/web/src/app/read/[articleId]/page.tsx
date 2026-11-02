@@ -1486,6 +1486,15 @@ export default function ReadPage() {
           voiceSample: {
             articleId: articleKey,
             text: voiceSampleText,
+            kind: () => {
+              const list = getParagraphs(getArticleBody(articleRef.current));
+              const paragraph =
+                (listen.index === null ? null : list[listen.index]) ??
+                currentParagraph();
+              if (paragraph && spokenBlock(paragraph)?.heading)
+                return "heading";
+              return paragraph?.closest("li") ? "list" : "prose";
+            },
             listenPlaying:
               listen.active && !listen.paused && listen.status !== "failed",
             listenPaused: listen.paused,

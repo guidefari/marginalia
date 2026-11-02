@@ -16,8 +16,8 @@ export interface Follower {
   start(): void;
   /** Ends a listen: stops watching, and forgets which block was last shown. */
   stop(): void;
-  /** Brings `el` into view if the page is following and it sits outside the band, at most once per element. */
-  reveal(el: HTMLElement): void;
+  /** Keeps the spoken position visible in oversized blocks. Progress is clamped to [0, 1]; omitting it retains this block's last value. */
+  reveal(el: HTMLElement, progress?: number): void;
   /** Scrolls `el` to the reading line and follows again. */
   follow(el: HTMLElement | undefined): void;
   readonly following: boolean;
@@ -80,13 +80,10 @@ function maxScroll() {
 
 /**
  * D-TTS-012, D-TTS-029: the page follows the voice until it moves somewhere the
- * voice didn't send it. Only scrolls of the document are watched (a contained
- * scroller such as the settings panel doesn't raise them on `window`), and the
- * follower decides from where the page is, never from which key or gesture
- * moved it. While the player's own scroll is in flight, any position between
- * where it started and where it is headed is the player's; any other position,
- * or any scroll once it has landed, is the reader's. `onChange` hears every
- * change of `following`.
+ * voice didn't send it. Only document scrolls are watched, not contained
+ * scrollers. Unexplained movement releases following, but viewport changes and
+ * layout/scroll anchoring do not. Input alone never releases following; actual
+ * movement after scroll input does, even inside the player's smooth-scroll path.
  */
 export function createFollower(onChange: () => void): Follower {
   let following = true;
@@ -107,12 +104,45 @@ export function createFollower(onChange: () => void): Follower {
   let shown: HTMLElement | null = null;
   /** The block the voice is on, which a change of viewport or clearance rechecks. */
   let current: HTMLElement | null = null;
+  let progress = 0;
   let recheckFrame = 0;
   let recheckPending = false;
+  let observer: ResizeObserver | undefined;
+  let visual: VisualViewport | null | undefined;
+  let lastY = 0;
+  let geometry: number[] = [];
+  let layoutUntil = 0;
+  let inputUntil = 0;
+
+  // Do not infer layout from rect.top alone: normal document scrolling changes
+  // it too. These measurements also catch anchoring before ResizeObserver runs.
+  const measure = () => {
+    const { top, bottom, line } = clearance();
+    return [
+      top,
+      bottom,
+      line,
+      window.innerHeight,
+      document.documentElement.scrollHeight,
+      current?.getBoundingClientRect().height ?? 0,
+    ];
+  };
+  const layoutChanged = () => {
+    const next = measure();
+    const changed = next.some(
+      (value, i) => Math.abs(value - (geometry[i] ?? value)) > TOLERANCE,
+    );
+    geometry = next;
+    return changed;
+  };
 
   const release = () => {
     if (!following) return;
     following = false;
+    recheckPending = false;
+    cancelAnimationFrame(recheckFrame);
+    recheckFrame = 0;
+    land();
     onChange();
   };
   const land = () => {
@@ -126,11 +156,39 @@ export function createFollower(onChange: () => void): Follower {
     }
   };
   const onScroll = () => {
+    const y = window.scrollY;
+    const moved = y !== lastY;
+    lastY = y;
+    if (!following) return;
+    const layout = layoutChanged();
+    if (!moved) {
+      if (layout) onLayout();
+      return;
+    }
+    const manual = Date.now() < inputUntil;
+    if (
+      document.visibilityState === "hidden" ||
+      (!manual && (layout || Date.now() < layoutUntil))
+    ) {
+      // Resize, image loading and browser chrome can move the document without
+      // browsing intent. Re-measure after layout, rather than releasing Follow.
+      if (flight) {
+        flight.lo = Math.min(flight.lo, y);
+        flight.hi = Math.max(flight.hi, y);
+        flight.arrived = false;
+        recheckPending = true;
+      }
+      recheckSoon();
+      return;
+    }
+    if (manual) {
+      release();
+      return;
+    }
     if (!flight) {
       release();
       return;
     }
-    const y = window.scrollY;
     const atTarget = Math.abs(y - flight.target) <= TOLERANCE;
     // Off the path, or moving away from a target it had already reached: the reader
     if (
@@ -138,7 +196,6 @@ export function createFollower(onChange: () => void): Follower {
       y > flight.hi + TOLERANCE ||
       (flight.arrived && !atTarget)
     ) {
-      land();
       release();
       return;
     }
@@ -150,36 +207,126 @@ export function createFollower(onChange: () => void): Follower {
   };
 
   /**
-   * Looks at the current block again, bypassing the once-per-block guard: the
-   * clearance it was measured against may have changed (the pill mounted after
-   * the first look, the viewport resized or turned). The player's own scroll,
-   * so it never unfollows; nothing is restarted.
+   * A tall block cannot fit in the band. Test the spoken point instead of both
+   * edges, so rechecks never drag it back to its start or chase its bottom.
    */
+  const ensureVisible = () => {
+    if (!current || document.visibilityState === "hidden") return;
+    const rect = current.getBoundingClientRect();
+    const { top, bottom } = clearance();
+    if (bottom <= top) return;
+    const tall = rect.height > bottom - top;
+    const point = rect.top + rect.height * progress;
+    if (
+      tall
+        ? point < top - TOLERANCE || point > bottom + TOLERANCE
+        : rect.top < top || rect.bottom > bottom
+    ) {
+      scrollTo(current);
+    }
+  };
   const recheck = () => {
     if (!following || !current) return;
     if (flight) {
       recheckPending = true;
       return;
     }
-    const rect = current.getBoundingClientRect();
-    const { top, bottom } = clearance();
-    if (rect.top < top || rect.bottom > bottom) scrollTo(current);
+    ensureVisible();
+    geometry = measure();
   };
   const recheckSoon = () => {
     cancelAnimationFrame(recheckFrame);
     recheckFrame = requestAnimationFrame(recheck);
   };
+  const onLayout = () => {
+    if (!watching || !following) return;
+    // A bounded grace period covers scroll events delivered after resize/load.
+    // Deliberate wheel/touch/key movement still takes precedence over it.
+    layoutUntil = Date.now() + SETTLE_MS;
+    recheckSoon();
+  };
+  const onVisualScroll = () => {
+    if (layoutChanged()) onLayout();
+  };
+  const onVisibility = () => {
+    if (document.visibilityState !== "hidden") onLayout();
+  };
+  const onInput = (event: Event) => {
+    // Input inside a contained scroller must not claim an unrelated player frame.
+    if (event.target instanceof Element) {
+      let element: Element | null = event.target;
+      while (
+        element &&
+        element !== document.body &&
+        element !== document.documentElement
+      ) {
+        const style = getComputedStyle(element);
+        if (
+          /(auto|scroll)/.test(style.overflowY) &&
+          element.scrollHeight > element.clientHeight
+        )
+          return;
+        element = element.parentElement;
+      }
+    }
+    // Native scrollbar presses target the root, unlike clicks in the article
+    // or a contained settings scroller.
+    if (
+      event.type === "pointerdown" &&
+      event.target !== document.documentElement
+    )
+      return;
+    if (
+      event instanceof KeyboardEvent &&
+      ![
+        "ArrowUp",
+        "ArrowDown",
+        "PageUp",
+        "PageDown",
+        "Home",
+        "End",
+        " ",
+        "j",
+        "J",
+        "k",
+        "K",
+        "r",
+        "Backspace",
+      ].includes(event.key)
+    )
+      return;
+    inputUntil = Date.now() + OWN_SCROLL_MS;
+  };
+  const setCurrent = (el: HTMLElement, next?: number) => {
+    if (current !== el) {
+      if (current) observer?.unobserve(current);
+      current = el;
+      progress = 0;
+      observer?.observe(el);
+      // Switching source blocks is not a layout change.
+      geometry[5] = el.getBoundingClientRect().height;
+    }
+    if (next !== undefined) {
+      progress = Number.isNaN(next) ? 0 : Math.max(0, Math.min(1, next));
+    }
+    if (layoutChanged()) onLayout();
+  };
 
   function scrollTo(el: HTMLElement) {
     const rect = el.getBoundingClientRect();
     const { top, bottom, line } = clearance();
+    if (bottom <= top || document.visibilityState === "hidden") return;
     const height = rect.height;
-    // A block that fits is centred on the reading line, kept between the
-    // toolbar and the bars; a taller one starts just below the toolbar
+    // Keep the existing placement for fitting blocks. For oversized blocks,
+    // move the spoken point to the reading line without exposing space before
+    // the block's beginning or after its end.
     const fits = height <= (bottom - top) * 0.6;
-    const wanted = fits
-      ? Math.max(top, Math.min(line - height / 2, bottom - height))
-      : top;
+    const wanted =
+      height > bottom - top
+        ? Math.max(bottom - height, Math.min(top, line - height * progress))
+        : fits
+          ? Math.max(top, Math.min(line - height / 2, bottom - height))
+          : top;
     const start = window.scrollY;
     // The browser clamps at the ends of the document; arming for a position it
     // can't reach would swallow the reader's scrolls when `scrollend` never comes
@@ -198,6 +345,11 @@ export function createFollower(onChange: () => void): Follower {
     clearTimeout(settleTimer);
     // `scrollend` isn't everywhere, and the position may never land exactly
     flightTimer = setTimeout(land, OWN_SCROLL_MS);
+    // This command, not an earlier gesture which did not move the page, owns
+    // the next scroll. New gestures during the animation can interrupt it.
+    inputUntil = 0;
+    lastY = start;
+    geometry = measure();
     window.scrollTo({
       top: target,
       behavior: reducedMotion() ? "instant" : "smooth",
@@ -216,42 +368,85 @@ export function createFollower(onChange: () => void): Follower {
       // The caller publishes its own state right after starting, so no onChange here
       following = true;
       watching = true;
+      lastY = window.scrollY;
+      geometry = measure();
+      visual = window.visualViewport;
       window.addEventListener("scroll", onScroll, { passive: true });
       window.addEventListener("scrollend", land);
-      window.addEventListener("resize", recheckSoon);
-      window.addEventListener("orientationchange", recheckSoon);
-      window.visualViewport?.addEventListener("resize", recheckSoon);
+      window.addEventListener("resize", onLayout);
+      window.addEventListener("orientationchange", onLayout);
+      window.addEventListener("wheel", onInput, { passive: true });
+      window.addEventListener("touchmove", onInput, { passive: true });
+      window.addEventListener("keydown", onInput);
+      window.addEventListener("pointerdown", onInput, { passive: true });
+      document.addEventListener("load", onLayout, true);
+      document.addEventListener("visibilitychange", onVisibility);
+      visual?.addEventListener("resize", onLayout);
+      visual?.addEventListener("scroll", onVisualScroll);
+      if (window.ResizeObserver) {
+        observer = new window.ResizeObserver(() => {
+          if (watching && layoutChanged()) onLayout();
+        });
+        for (const el of [
+          document.documentElement,
+          document.body,
+          ...document.querySelectorAll(
+            ".reader-toolbar, .listen-wrap, .mobile-reader-bar",
+          ),
+        ]) {
+          observer.observe(el);
+        }
+      }
     },
     stop() {
       if (!watching) return;
       watching = false;
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("scrollend", land);
-      window.removeEventListener("resize", recheckSoon);
-      window.removeEventListener("orientationchange", recheckSoon);
-      window.visualViewport?.removeEventListener("resize", recheckSoon);
+      window.removeEventListener("resize", onLayout);
+      window.removeEventListener("orientationchange", onLayout);
+      window.removeEventListener("wheel", onInput);
+      window.removeEventListener("touchmove", onInput);
+      window.removeEventListener("keydown", onInput);
+      window.removeEventListener("pointerdown", onInput);
+      document.removeEventListener("load", onLayout, true);
+      document.removeEventListener("visibilitychange", onVisibility);
+      visual?.removeEventListener("resize", onLayout);
+      visual?.removeEventListener("scroll", onVisualScroll);
+      visual = null;
+      observer?.disconnect();
+      observer = undefined;
       cancelAnimationFrame(recheckFrame);
+      recheckFrame = 0;
+      recheckPending = false;
       current = null;
       land();
       shown = null;
+      progress = 0;
+      layoutUntil = 0;
+      inputUntil = 0;
     },
-    reveal(el) {
+    reveal(el, next) {
+      if (!watching) return;
+      setCurrent(el, next);
       if (!following) return;
-      current = el;
       // The pill mounts after the first look, so look again once it has
       recheckSoon();
-      if (shown === el) return;
+      if (shown === el) {
+        // Progress can advance during a smooth scroll. Defer to its landing
+        // instead of restarting the animation on every playback update.
+        recheck();
+        return;
+      }
       shown = el;
-      const rect = el.getBoundingClientRect();
-      const { top, bottom } = clearance();
-      if (rect.top < top || rect.bottom > bottom) scrollTo(el);
+      ensureVisible();
     },
     follow(el) {
       const was = following;
       following = true;
       if (el) {
         shown = el;
-        current = el;
+        setCurrent(el);
         scrollTo(el);
       }
       if (!was) onChange();

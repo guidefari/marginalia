@@ -1,10 +1,11 @@
 "use client";
 import { api } from "@marginalia/backend/convex/_generated/api";
 import type { Id } from "@marginalia/backend/convex/_generated/dataModel";
+import type { NarrationKind } from "@marginalia/backend/narration";
 import { useMutation, useQuery } from "convex/react";
 import { Play, Square } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { InlineError } from "@/components/in-place";
 import { failureSentence } from "@/lib/failure-copy";
 import {
@@ -13,6 +14,7 @@ import {
   MIN_SPEED,
   SPEED_STEP,
 } from "@/lib/listen-speed";
+import { createTextPreparer } from "@/lib/narration-preparation";
 import { SILENT_CLIP, trackSpeechRequest } from "@/lib/use-natural-voice";
 import { requestSpeechClip } from "@/lib/use-speech-clip";
 import { cn } from "@/lib/utils";
@@ -22,6 +24,7 @@ export interface VoiceSampleSource {
   articleId: Id<"articles">;
   /** The opening of the paragraph the reader is on. */
   text: () => string;
+  kind?: () => NarrationKind;
   /** Listen's state, so a sample doesn't talk over it. */
   listenPlaying: boolean;
   listenPaused: boolean;
@@ -29,7 +32,7 @@ export interface VoiceSampleSource {
 }
 
 type Sampling = { voice: string; token: number };
-type SampleRequest = Sampling & { text: string };
+type SampleRequest = Sampling & { text: string; kind: NarrationKind };
 
 // One sample request at a time, across closing and reopening settings: a
 // request already sent can't be called back, so it keeps the turn until it
@@ -55,6 +58,11 @@ export function ListeningSettings({
   const choice = useQuery(api.userSettings.getSpeechVoice, {});
   const capabilities = useQuery(api.providerCredentials.capabilities, {});
   const noKey = capabilities?.providers.includes("openrouter") === false;
+  const sampleArticleId = sample?.articleId;
+  const prepare = useMemo(
+    () => (sampleArticleId ? createTextPreparer(sampleArticleId) : undefined),
+    [sampleArticleId],
+  );
   // The radio moves at once and the next clip Listen asks for is in the new voice
   const setVoice = useMutation(
     api.userSettings.setSpeechVoice,
@@ -141,7 +149,12 @@ export function ListeningSettings({
     audio.current ??= new Audio();
     audio.current.src = SILENT_CLIP;
     audio.current.play().catch(() => undefined);
-    const next = { voice, token, text: sample.text() };
+    const next = {
+      voice,
+      token,
+      text: sample.text(),
+      kind: sample.kind?.() ?? "prose",
+    };
     if (sampleInFlight)
       nextSample = () => {
         if (tokens.current === token) send(next);
@@ -149,17 +162,24 @@ export function ListeningSettings({
     else send(next);
   };
 
-  const send = ({ voice, token, text }: SampleRequest) => {
+  const send = ({ voice, token, text, kind }: SampleRequest) => {
     const reader = listen.current;
     const element = audio.current;
     if (!reader || !element) return;
     sampleInFlight = true;
     const controller = new AbortController();
     waiting.current = controller;
-    trackSpeechRequest(
-      () => requestSpeechClip({ articleId: reader.articleId, text, voice }),
-      controller.signal,
-    )
+    trackSpeechRequest(async () => {
+      const spoken = prepare
+        ? await prepare(text, controller.signal, kind)
+        : text;
+      controller.signal.throwIfAborted();
+      return requestSpeechClip({
+        articleId: reader.articleId,
+        text: spoken,
+        voice,
+      });
+    }, controller.signal)
       .then((bytes) => {
         if (tokens.current !== token) return;
         const clip = URL.createObjectURL(
@@ -315,7 +335,8 @@ export function ListeningSettings({
           >
             Add an OpenRouter key in Your account
           </Link>{" "}
-          to use these voices.
+          to use these voices. Without an AI key, the device voice uses basic
+          text cleanup only.
         </p>
       ) : (
         <p
@@ -325,7 +346,10 @@ export function ListeningSettings({
           Uses your OpenRouter key, about 3 cents an hour for any of these
           voices. Play, or Space on a voice, reads the paragraph you're on.
           While listening, the clip playing finishes in the old voice and the
-          next one is in the new voice.
+          next one is in the new voice. Your Quick AI model prepares passages
+          before this synthetic voice reads them, with additional provider
+          charges. Code is explained; images use source descriptions, not
+          guessed visual details. The original article stays unchanged.
         </p>
       )}
     </div>

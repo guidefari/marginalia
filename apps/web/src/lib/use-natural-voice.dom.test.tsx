@@ -10,6 +10,10 @@ const query = vi.hoisted(() => ({
   value: { providers: ["openrouter"] } as { providers: string[] } | undefined,
 }));
 vi.mock("convex/react", () => ({ useQuery: () => query.value }));
+// State-machine cases stub preparation; its transport and fidelity are tested separately.
+vi.mock("./narration-preparation", () => ({
+  createTextPreparer: () => async (text: string) => text,
+}));
 
 class FakeAudio {
   static all: FakeAudio[] = [];
@@ -753,7 +757,7 @@ describe("going back", () => {
     };
     await settleAll();
     // The long paragraph is several clips: play through them to block 1
-    for (let n = 0; n < 6 && listen.index === 0; n++) {
+    for (let n = 0; n < 16 && listen.index === 0; n++) {
       await ended();
       await elapse(400);
       await settleAll();
@@ -1183,6 +1187,62 @@ describe("an ended event that is already queued when Pause runs", () => {
 });
 
 describe("a keyless reader who started before the capabilities loaded", () => {
+  it("uses the device-only code notice for ChatGPT-plan-only readers", async () => {
+    query.value = { providers: ["chatgpt"] };
+    window.sessionStorage.setItem("marginalia.listenVoice", "device");
+    mountArticle(["<code>if (ok) return false;</code>"], ["pre"]);
+    await act(async () => root.render(<Harness />));
+    await start(0);
+    expect(speak).toHaveBeenCalledOnce();
+    expect(speak.mock.calls[0][0].text).toContain("needs an AI provider key");
+    expect(speak.mock.calls[0][0].text).not.toContain("if (ok)");
+  });
+  it("clears a paused capability wait when seeking after the providers arrive", async () => {
+    query.value = undefined;
+    window.sessionStorage.setItem("marginalia.listenVoice", "device");
+    mountArticle(plain());
+    await act(async () => root.render(<Harness />));
+    await start(0);
+    await act(async () => listen.togglePause());
+    query.value = { providers: ["openrouter"] };
+    await act(async () => root.render(<Harness />));
+    await act(async () => listen.next());
+    expect(listen.index).toBe(1);
+    expect(listen.status).toBe("playing");
+    expect(speak.mock.calls.at(-1)?.[0].text).toBe(paragraphText(1));
+  });
+
+  it("does not revive a pending device start when source identity and capabilities change together", async () => {
+    query.value = undefined;
+    window.sessionStorage.setItem("marginalia.listenVoice", "device");
+    mountArticle(plain());
+    await act(async () => root.render(<Harness />));
+    await start(0);
+    query.value = { providers: ["openrouter"] };
+    await act(async () => root.render(<Harness content="Different source" />));
+    expect(listen.active).toBe(false);
+    expect(speak).not.toHaveBeenCalled();
+  });
+
+  it("waits for capabilities before starting a persisted device choice, retaining Pause and Stop", async () => {
+    query.value = undefined;
+    window.sessionStorage.setItem("marginalia.listenVoice", "device");
+    mountArticle(plain());
+    await act(async () => root.render(<Harness />));
+    await start(0);
+    expect(listen.status).toBe("preparing");
+    expect(speak).not.toHaveBeenCalled();
+    await act(async () => listen.togglePause());
+    query.value = { providers: ["openrouter"] };
+    await act(async () => root.render(<Harness />));
+    expect(listen.status).toBe("paused");
+    expect(speak).not.toHaveBeenCalled();
+    await act(async () => listen.togglePause());
+    expect(speak).toHaveBeenCalledOnce();
+    await act(async () => listen.stop());
+    expect(listen.active).toBe(false);
+  });
+
   it("is offered the choice from the same paragraph once the capabilities say there's no key, after the request failed", async () => {
     query.value = undefined;
     mountArticle(plain());

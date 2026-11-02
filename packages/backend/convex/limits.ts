@@ -87,6 +87,11 @@ export const READER_LIMITS = {
     windowMs: 60_000,
     message: "Listening is paused for a minute to limit requests.",
   },
+  speechPreparation: {
+    max: 60,
+    windowMs: 60_000,
+    message: "Listening preparation is paused for a minute. Wait, then Retry.",
+  },
 } as const;
 
 export type LimitBucket = keyof typeof READER_LIMITS;
@@ -105,6 +110,7 @@ const bucket = v.union(
   v.literal("alongsideRetrieval"),
   v.literal("bookIndex"),
   v.literal("speech"),
+  v.literal("speechPreparation"),
 );
 
 /** Spends one request from the reader's bucket; false when it's used up. */

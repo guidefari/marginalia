@@ -8,6 +8,7 @@ import {
   rememberConvexToken,
   setTokenSession,
   tokenExpiry,
+  tokenSessionGeneration,
 } from "./convex-token";
 
 const jwt = (expSeconds: number) =>
@@ -32,6 +33,17 @@ describe("tokenExpiry", () => {
 });
 
 describe("getConvexToken", () => {
+  it("changes the reader generation only for session changes, not rejected-token refreshes", () => {
+    const generation = tokenSessionGeneration();
+    forgetConvexToken();
+    expect(tokenSessionGeneration()).toBe(generation);
+    setTokenSession("A");
+    expect(tokenSessionGeneration()).toBe(generation);
+    setTokenSession("B");
+    expect(tokenSessionGeneration()).toBe(generation + 1);
+    setTokenSession(null);
+    expect(tokenSessionGeneration()).toBe(generation + 2);
+  });
   it("aborts one waiter without cancelling the shared refresh or losing its cache", async () => {
     const fresh = jwt(NOW / 1000 + 600);
     let finish!: (value: string) => void;

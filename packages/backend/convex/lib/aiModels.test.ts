@@ -267,3 +267,94 @@ describe("generateObjectWithFallback", () => {
     expect(generateObject).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("opt-in OpenRouter privacy policy", () => {
+  beforeEach(() => generateObject.mockReset());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([
+    { provider: "openrouter", denyDataCollection: true, expected: "deny" },
+    { provider: "openrouter", denyDataCollection: false, expected: undefined },
+    { provider: "openai", denyDataCollection: true, expected: undefined },
+  ] as const)("sends the policy only for opted-in OpenRouter calls: %j", async ({
+    provider,
+    denyDataCollection,
+    expected,
+  }) => {
+    const requests: Request[] = [];
+    const payloads: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        requests.push(request);
+        payloads.push(await request.clone().json());
+        return new Response(
+          JSON.stringify({
+            id: "fixture",
+            object: "chat.completion",
+            created: 0,
+            model: "fixture-model",
+            choices: [
+              {
+                index: 0,
+                message: { role: "assistant", content: '{"ok":true}' },
+                finish_reason: "stop",
+              },
+            ],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+          }),
+          { headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+    // Exercise the real SDK model's HTTP path, not a mock of createOpenAI.
+    // Only the outer structured-generation helper is mocked in this suite.
+    generateObject.mockImplementationOnce(async ({ model, abortSignal }) => {
+      await model.doGenerate({
+        prompt: [
+          {
+            role: "user",
+            content: [{ type: "text", text: "Private fixture passage." }],
+          },
+        ],
+        abortSignal,
+        maxOutputTokens: 1400,
+      });
+      return { object: { ok: true } };
+    });
+    const controller = new AbortController();
+    await generateObjectWithFallback({
+      schema: z.object({ ok: z.boolean() }),
+      targets: [
+        {
+          id: `${provider}:fixture-model`,
+          provider,
+          model: "fixture-model",
+          name: "Fixture",
+          apiKey: "reader-fixture-key",
+        },
+      ],
+      denyDataCollection,
+      signal: controller.signal,
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0].url).toBe(
+      provider === "openrouter"
+        ? "https://openrouter.ai/api/v1/chat/completions"
+        : "https://api.openai.com/v1/chat/completions",
+    );
+    expect(requests[0].method).toBe("POST");
+    expect(requests[0].headers.get("authorization")).toBe(
+      "Bearer reader-fixture-key",
+    );
+    expect(payloads[0]).toMatchObject({
+      model: "fixture-model",
+      messages: [{ role: "user", content: "Private fixture passage." }],
+    });
+    expect(payloads[0].provider).toEqual(
+      expected ? { data_collection: expected } : undefined,
+    );
+    expect(requests[0].signal.aborted).toBe(true);
+  });
+});

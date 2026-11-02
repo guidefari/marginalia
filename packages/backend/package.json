@@ -15,6 +15,7 @@
     "./library-search": "./convex/lib/librarySearch.ts",
     "./local-context": "./convex/lib/localContext.ts",
     "./prepared-representation": "./convex/lib/preparedRepresentation.ts",
+    "./narration": "./convex/lib/narration.ts",
     "./reading-sections": "./convex/lib/readingSections.ts",
     "./mark-colours": "./convex/lib/markColours.ts",
     "./*": "./convex/*",

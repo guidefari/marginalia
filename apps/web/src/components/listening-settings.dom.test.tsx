@@ -8,6 +8,10 @@ import {
   type VoiceSampleSource,
 } from "./listening-settings";
 
+vi.mock("@/lib/narration-preparation", () => ({
+  createTextPreparer: () => state.prepare,
+}));
+
 const HEART = "openrouter:hexgrad/kokoro-82m#af_heart";
 const EMMA = "openrouter:hexgrad/kokoro-82m#bf_emma";
 
@@ -15,6 +19,7 @@ const state = vi.hoisted(() => ({
   providers: ["openrouter"] as string[],
   setVoice: vi.fn(),
   clip: vi.fn(),
+  prepare: vi.fn(),
 }));
 vi.mock("convex/react", async () => {
   const { getFunctionName } = await import("convex/server");
@@ -63,6 +68,7 @@ beforeEach(() => {
   state.providers = ["openrouter"];
   state.setVoice.mockReset().mockResolvedValue(null);
   state.clip.mockReset().mockResolvedValue(new Uint8Array([1, 2]).buffer);
+  state.prepare.mockReset().mockImplementation(async (text: string) => text);
   URL.createObjectURL = () => "blob:sample";
   URL.revokeObjectURL = () => undefined;
   listen = {
@@ -99,6 +105,18 @@ it("lists the voices as a radio group with the saved one chosen", async () => {
   expect(document.querySelector('[role="radiogroup"]')).not.toBeNull();
   expect(radio(HEART).checked).toBe(true);
   expect(radio(EMMA).checked).toBe(false);
+});
+
+it("prepares heading samples with the same source kind as Listen", async () => {
+  listen.text = () => "TL;DR.";
+  listen.kind = () => "heading";
+  await render();
+  await act(async () => playButton("Kokoro · Emma").click());
+  expect(state.prepare).toHaveBeenCalledWith(
+    "TL;DR.",
+    expect.any(AbortSignal),
+    "heading",
+  );
 });
 
 it("saves a new choice", async () => {

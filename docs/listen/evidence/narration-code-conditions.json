@@ -1,0 +1,36 @@
+{
+  "version": "spoken-1",
+  "checkedAt": "2026-11-02T09:32:01.479Z",
+  "passed": 0,
+  "total": 1,
+  "scope": "Live text preparation on public synthetic fixtures. Not listening or browser validation.",
+  "records": [
+    {
+      "name": "code-conditions",
+      "passed": false,
+      "draft": {
+        "edits": [],
+        "codeExplanation": "This snippet is a single if statement. Its condition has two parts joined by and: score must be less than or equal to -0.50, and ready must be truthy. When that condition is met, the code calls report with the literal string \"low\". The snippet does not show what report does."
+      },
+      "errorType": "Error",
+      "durationMs": 3735,
+      "events": [
+        {
+          "modelId": "openrouter:anthropic/claude-haiku-5.5",
+          "responseModel": "anthropic/claude-haiku-5.5",
+          "durationMs": 3733,
+          "finishReason": "stop",
+          "parsed": true,
+          "tokens": {
+            "input": 1650,
+            "cachedInput": 0,
+            "output": 434,
+            "visibleOutput": 99,
+            "reasoning": 335,
+            "total": 2084
+          }
+        }
+      ]
+    }
+  ]
+}

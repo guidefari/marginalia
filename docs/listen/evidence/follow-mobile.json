@@ -1,0 +1,16 @@
+{
+  "scope": "Real Chromium layout fixture using the production follower, not an authenticated app or audio test.",
+  "scrollY": 4570,
+  "progress": 0.5,
+  "point": 337.828125,
+  "toolbarBottom": 80,
+  "pillTop": 754,
+  "following": true,
+  "height": 844,
+  "manualScrollCheck": {
+    "followingAfterManualScroll": false,
+    "followingAfterFollowButton": true,
+    "restoredPoint": 337.828125,
+    "scope": "Manual 250px scroll disabled following; Follow restored visibility without changing progress."
+  }
+}

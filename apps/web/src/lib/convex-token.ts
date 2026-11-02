@@ -15,12 +15,19 @@ let inflight: Promise<string | null> | null = null;
 // a token fetched for an earlier session can never land in a later one's cache
 let session: string | null = null;
 let generation = 0;
+let sessionGeneration = 0;
+
+/** Stable across JWT refreshes; changes on sign-out or a different reader session. */
+export function tokenSessionGeneration(): number {
+  return sessionGeneration;
+}
 
 /** Ties the cache to the signed-in session; a different session starts empty. */
 export function setTokenSession(sessionId: string | null) {
   if (sessionId === session) return;
   session = sessionId;
   generation++;
+  sessionGeneration++;
   cached = null;
   inflight = null;
 }
