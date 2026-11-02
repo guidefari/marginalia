@@ -6,7 +6,9 @@ import { Fingerprint, LockKeyhole } from "lucide-react";
 import { usePathname } from "next/navigation";
 import {
   type CSSProperties,
+  type Dispatch,
   type ReactNode,
+  type SetStateAction,
   useEffect,
   useRef,
   useState,
@@ -40,9 +42,13 @@ interface AccessRequestDraft {
   note: string;
 }
 
+type AccessRequestDraftUpdater = Dispatch<
+  SetStateAction<AccessRequestDraft | null>
+>;
+
 interface AccessRequestDraftState {
   requestDraft: AccessRequestDraft | null;
-  onRequestDraftChange: (draft: AccessRequestDraft | null) => void;
+  onRequestDraftChange: AccessRequestDraftUpdater;
 }
 
 /**
@@ -566,7 +572,7 @@ export function RequestAccess({
 }: {
   onBack: () => void;
   initialDraft?: AccessRequestDraft | null;
-  onDraftChange?: (draft: AccessRequestDraft | null) => void;
+  onDraftChange?: AccessRequestDraftUpdater;
 }) {
   const request = useMutation(api.waitlist.request);
   const [busy, setBusy] = useState(false);
@@ -579,13 +585,17 @@ export function RequestAccess({
     setBusy(true);
     setError("");
     const fields = new FormData(event.currentTarget);
+    const submittedDraft = initialDraft ?? null;
     try {
       const result = await request({
         email: String(fields.get("email") ?? ""),
         name: String(fields.get("name") ?? ""),
         note: String(fields.get("note") ?? "") || undefined,
       });
-      onDraftChange?.(null);
+      // A later request or edit must not be cleared by this completion.
+      onDraftChange?.((current) =>
+        current === submittedDraft ? null : current,
+      );
       setDone(result.message);
     } catch (e) {
       setError(

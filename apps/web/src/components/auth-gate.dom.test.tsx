@@ -357,7 +357,11 @@ describe("access-request drafts", () => {
   async function startDraft() {
     await renderAt("/");
     await activate("Request access");
-    for (const [name, value] of Object.entries(draft)) {
+    await fillDraft(draft);
+  }
+
+  async function fillDraft(values: typeof draft) {
+    for (const [name, value] of Object.entries(values)) {
       const input = document.querySelector<
         HTMLInputElement | HTMLTextAreaElement
       >(`[name="${name}"]`)!;
@@ -368,9 +372,9 @@ describe("access-request drafts", () => {
     }
   }
 
-  function expectDraft() {
+  function expectDraft(expected = draft) {
     expect(document.querySelector("h1")?.textContent).toBe("Request access");
-    for (const [name, value] of Object.entries(draft))
+    for (const [name, value] of Object.entries(expected))
       expect(
         document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
           `[name="${name}"]`,
@@ -446,6 +450,42 @@ describe("access-request drafts", () => {
     await renderAt("/privacy");
     await renderAt("/");
     expectDraft();
+    expect(state.mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    "sign-in",
+    "auth check",
+  ])("does not clear a newer draft after %s when an older submission succeeds", async (transition) => {
+    let finish!: (result: { message: string }) => void;
+    state.mutate.mockReturnValueOnce(
+      new Promise<{ message: string }>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    await startDraft();
+    await submit();
+    if (transition === "sign-in") {
+      await activate("Back to sign in");
+      await activate("Request access");
+    } else {
+      state.loading = true;
+      await renderAt("/");
+      state.loading = false;
+      await renderAt("/");
+    }
+    // A new attempt may even contain exactly the same words as the old one.
+    const nextDraft = {
+      ...draft,
+      note: transition === "sign-in" ? draft.note : "A newer unsent note",
+    };
+    await fillDraft(nextDraft);
+    await act(async () =>
+      finish({ message: "The older request was accepted" }),
+    );
+    await renderAt("/privacy");
+    await renderAt("/");
+    expectDraft(nextDraft);
     expect(state.mutate).toHaveBeenCalledTimes(1);
   });
 
