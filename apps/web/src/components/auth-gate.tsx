@@ -273,6 +273,28 @@ function SignIn({ fragment }: { fragment: FragmentTokens | null }) {
     if (invited || owner) setPasswordForm(true);
   }, [fragment]);
   const signingUp = Boolean(setup || invite);
+  const formRef = useRef<HTMLFormElement>(null);
+  const passkeyRef = useRef<HTMLButtonElement>(null);
+  const step =
+    requesting && !signingUp
+      ? "request"
+      : factor
+        ? backup
+          ? "recovery"
+          : "authenticator"
+        : passwordForm
+          ? "password"
+          : "passkey";
+  const previousStep = useRef(step);
+  useEffect(() => {
+    // Move focus only when the reader changes steps, not on load or errors.
+    if (previousStep.current === step) return;
+    previousStep.current = step;
+    const target =
+      formRef.current?.querySelector<HTMLInputElement>("input") ??
+      passkeyRef.current;
+    target?.focus();
+  }, [step]);
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -354,6 +376,7 @@ function SignIn({ fragment }: { fragment: FragmentTokens | null }) {
         </p>
         {!passwordForm && !factor && (
           <button
+            ref={passkeyRef}
             disabled={busy}
             className="app-button w-full mb-4"
             onClick={async () => {
@@ -379,7 +402,7 @@ function SignIn({ fragment }: { fragment: FragmentTokens | null }) {
           </button>
         )}
         {(passwordForm || factor) && (
-          <form onSubmit={submit} className="space-y-4">
+          <form ref={formRef} onSubmit={submit} className="space-y-4">
             {factor ? (
               <label className="block text-sm">
                 {backup ? "Recovery code" : "Authenticator code"}
@@ -489,6 +512,8 @@ export function RequestAccess({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
+  const emailRef = useRef<HTMLInputElement>(null);
+  useEffect(() => emailRef.current?.focus(), []);
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -530,6 +555,7 @@ export function RequestAccess({ onBack }: { onBack: () => void }) {
               <label className="block text-sm">
                 Email
                 <input
+                  ref={emailRef}
                   className="app-input mt-2"
                   name="email"
                   type="email"
