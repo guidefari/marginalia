@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, type Mock, vi } from "vitest";
 import DeskLayout from "@/app/(desk)/layout";
 import DeskRoute from "@/app/(desk)/page";
 import { AuthGate } from "./auth-gate";
@@ -10,8 +10,8 @@ const state: {
   loading: boolean;
   authenticated: boolean;
   reader: { isOwner: boolean } | null | undefined;
-  navigationLoaded: ReturnType<typeof vi.fn>;
-  deskLoaded: ReturnType<typeof vi.fn>;
+  navigationLoaded: Mock<() => void>;
+  deskLoaded: Mock<() => void>;
 } = vi.hoisted(() => ({
   loading: true,
   authenticated: false,
