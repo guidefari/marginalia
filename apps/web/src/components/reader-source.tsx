@@ -47,9 +47,11 @@ export function ReaderSource({
           aria-label={`Unsubscribe from ${feed.title}`}
           aria-expanded={confirming}
           aria-controls={confirming ? confirmationId : undefined}
-          disabled={removing}
-          onClick={() => setConfirming((open) => !open)}
-          className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-[var(--ink)] disabled:opacity-40"
+          aria-disabled={removing}
+          onClick={() => {
+            if (!removing) setConfirming((open) => !open);
+          }}
+          className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-[var(--ink)] aria-disabled:opacity-40"
         >
           Unsubscribe
         </button>

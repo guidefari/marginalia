@@ -79,6 +79,7 @@ describe("reader source", () => {
       articles: choice,
     });
     expect(button("Unsubscribe").getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(button("Unsubscribe"));
   });
 
   it("cancels without changing the source and returns focus", async () => {
@@ -114,17 +115,22 @@ describe("reader source", () => {
     await act(async () => button("Unsubscribe").click());
     await act(async () => button("Remove").click());
     const trigger = button("Unsubscribe");
-    expect(trigger.disabled).toBe(true);
+    expect(trigger.getAttribute("aria-disabled")).toBe("true");
     await act(async () => {
       trigger.click();
       trigger.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
       );
+      document
+        .querySelector<HTMLInputElement>('input[value="keep"]')!
+        .dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
     });
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(button("Removing…")).toBeDefined();
     await act(async () => rejectRemoval(new Error("offline")));
-    expect(trigger.disabled).toBe(false);
+    expect(trigger.getAttribute("aria-disabled")).toBe("false");
     expect(document.querySelector('[role="alert"]')?.textContent).toContain(
       "Couldn't remove the feed",
     );
