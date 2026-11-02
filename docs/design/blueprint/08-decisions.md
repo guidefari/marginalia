@@ -243,7 +243,7 @@ Change a decision only by adding a new entry that replaces the old one.
 - **BK, 2026-10-16:** "I really want to collect all kinds of stats, what times I read, what times I read short things vs long things, what topics do I linger on, what words to i ask for definitions on, maybe keep a log of my growing vocabulary (like a personal dictionary) make it look like a dictionary in it's look and formatting and even how I find words), what topics I am interested in. etc what time of day, what day of the week, etc etc etc. so that I can go to a stats page and see all kinds of visual graphics and representations of my reading. This is also useful beyond looking pretty. It can be used to learn over time the things that I will most likely read for the ahead of time annotations and even to suggest rss feeds that I should probably unsubscribe from."
 - **Found:** visits, sessions and offer outcomes are already recorded (`readingActivity`, `sessions`, `articleInteractions`); paragraph dwell, topics and a reliable lookup log are not.
 - **Why record now:** history can't be filled in later, so recording (rung 2g) ships long before the pictures (rung 5b).
-- **Rule:** no streaks, goals or nudges (the thinking partner shows; BK concludes, D-DES-051).
+- **Rule:** no streaks or nudges (the thinking partner shows; BK concludes, D-DES-051). BK's explicit 2026-11-02 request supersedes the no-goals restriction only for an optional, editable daily estimated-page goal: 300 words per page, partial newly qualified article text, daily history, a compact reader counter and one quiet acknowledged celebration. It does not authorize reminders, leaderboards or guilt messaging.
 
 ### D-DES-058: A personal dictionary of every word BK looks up, laid out and searched like a dictionary. (BK)
 - **BK, 2026-10-16:** "maybe keep a log of my growing vocabulary (like a personal dictionary) make it look like a dictionary in it's look and formatting and even how I find words".
@@ -256,6 +256,7 @@ Change a decision only by adding a new entry that replaces the old one.
 ### D-DES-060: Stats and the dictionary live in their own room, Your reading, outside the reading path. (BK)
 - **BK, 2026-10-16:** "if you put stats and dictionary in the reader even in the notes tab they become a source of distraction."
 - **Replaces** D-DES-024's "This week becomes Notes → Your week": Your reading is a fourth room in the header, never linked from the reader or the notes pane.
+- **2026-11-02 exception:** the explicitly requested opt-in page-goal counter may appear in the existing reader toolbar. Detailed Stats and goal editing stay in Your reading; no new floating control or focus-taking celebration.
 
 ### D-DES-061: Four rooms in the header; settings behind the avatar. (BK)
 - **BK, 2026-10-16, answering Q3 and Q4:** yes to four rooms (Desk as the wordmark, Library with Up next, Saved, Loved and Finished shelves, Notes, Your reading) and yes to Sources, Account and Readers behind the avatar menu.
