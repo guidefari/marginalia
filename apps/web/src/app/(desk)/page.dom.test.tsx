@@ -3,11 +3,11 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import DeskRoute, { DOUBLE_CHOICE_MS } from "@/components/desk/desk";
 import { SKELETON_DELAY_MS } from "@/components/desk/desk-pick";
 import { markFinished, rememberedTitle } from "@/lib/title-handoff";
 import { ALT_HOLD_MS, AltHintProvider } from "@/lib/use-alt-hint";
 import { SAVED_MS } from "@/lib/use-timed-flag";
-import DeskRoute, { DOUBLE_CHOICE_MS } from "./page";
 
 // Motion completes in the mock; actions no longer wait on a wall-clock cooldown.
 const SETTLE_MS = 0;

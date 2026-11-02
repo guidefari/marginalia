@@ -3,7 +3,7 @@ import { Home, Library, NotebookPen, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AccountMenu } from "@/components/account-menu";
-import { emitCommand } from "@/lib/shortcuts";
+import { requestFinder } from "@/lib/finder-request";
 import { cn } from "@/lib/utils";
 
 export interface NavItem {
@@ -93,7 +93,7 @@ const roomClass =
 function useOpenFinder(pathname: string) {
   const router = useRouter();
   return () => {
-    if (pathname === "/") emitCommand("open-finder");
+    if (pathname === "/") requestFinder();
     else router.push("/?find=1");
   };
 }

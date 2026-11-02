@@ -1,10 +1,20 @@
 "use client";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { lazy, type ReactNode, Suspense } from "react";
 import { LegalFooter } from "@/components/legal-footer";
-import { MobileNav, SiteHeader } from "@/components/site-header";
 import { useReaderSettings } from "@/lib/reader-settings";
 import { useReaderTheme } from "@/lib/use-reader-theme";
+
+const SiteHeader = lazy(() =>
+  import("@/components/site-header").then((module) => ({
+    default: module.SiteHeader,
+  })),
+);
+const MobileNav = lazy(() =>
+  import("@/components/site-header").then((module) => ({
+    default: module.MobileNav,
+  })),
+);
 
 /** Persistent chrome for every destination in the desk frame. */
 export default function DeskLayout({ children }: { children: ReactNode }) {
@@ -14,7 +24,11 @@ export default function DeskLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="desk-shell h-dvh flex flex-col overflow-hidden bg-[var(--reader-bg)] text-[var(--reader-fg)] font-sans">
-      <SiteHeader />
+      <Suspense
+        fallback={<div aria-hidden="true" className="shrink-0 h-14 md:h-16" />}
+      >
+        <SiteHeader />
+      </Suspense>
       <div
         className="desk-route flex-1 min-h-0 overflow-y-auto overscroll-contain"
         data-route={pathname}
@@ -22,7 +36,16 @@ export default function DeskLayout({ children }: { children: ReactNode }) {
         {children}
       </div>
       <LegalFooter />
-      <MobileNav />
+      <Suspense
+        fallback={
+          <div
+            aria-hidden="true"
+            className="md:hidden shrink-0 h-[calc(3.5rem+env(safe-area-inset-bottom)+1px)]"
+          />
+        }
+      >
+        <MobileNav />
+      </Suspense>
     </div>
   );
 }

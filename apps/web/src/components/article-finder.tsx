@@ -22,6 +22,7 @@ import {
 } from "@/components/finder-notes";
 import { InlineError, Skeleton, SkeletonBar } from "@/components/in-place";
 import { FAILURE_COPY, failureSentence } from "@/lib/failure-copy";
+import { consumeFinderRequest } from "@/lib/finder-request";
 import {
   isOnControl,
   isTypingTarget,
@@ -266,11 +267,15 @@ export function ArticleFinder({
       keys: [["/", "Search, paste a link or choose a PDF"]],
     },
   });
-  useCommand("open-finder", () => setOpen(true));
+  useCommand("open-finder", () => {
+    consumeFinderRequest();
+    setOpen(true);
+  });
   // Search from another room lands on the desk with ?find=1; open the picker once
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (url.searchParams.get("find") !== "1") return;
+    const requested = consumeFinderRequest();
+    if (!requested && url.searchParams.get("find") !== "1") return;
     url.searchParams.delete("find");
     window.history.replaceState(window.history.state, "", url);
     setOpen(true);
