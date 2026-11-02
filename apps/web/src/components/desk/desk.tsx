@@ -40,7 +40,7 @@ function TimesWithFits(props: Omit<Parameters<typeof TimeChoices>[0], "fits">) {
   return <TimeChoices {...props} fits={fits} />;
 }
 
-function Desk() {
+function Desk({ fromFinish }: { fromFinish?: boolean }) {
   const bible = useQuery(api.bible.preferences, {});
   const convex = useConvex();
   const params = useSearchParams();
@@ -57,7 +57,7 @@ function Desk() {
   };
   // Done brought us here: the slot slides its next pick in (globals.css)
   const [arrival, setArrival] = useState(() =>
-    !arrivedFromFinish()
+    !(fromFinish ?? arrivedFromFinish())
       ? undefined
       : typeof document.startViewTransition === "function"
         ? "finish"
@@ -225,11 +225,11 @@ function SlotFailure({ retry }: { retry: () => void }) {
   );
 }
 
-export default function DeskRoute() {
+export default function DeskRoute({ fromFinish }: { fromFinish?: boolean }) {
   // useSearchParams needs a Suspense boundary for static rendering
   return (
     <Suspense fallback={null}>
-      <Desk />
+      <Desk fromFinish={fromFinish} />
     </Suspense>
   );
 }

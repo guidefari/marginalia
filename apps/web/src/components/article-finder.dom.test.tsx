@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { consumeFinderRequest, requestFinder } from "@/lib/finder-request";
 import { invalidateTopicSearchCache } from "@/lib/use-topic-search";
 import { ArticleFinder } from "./article-finder";
 
@@ -75,7 +76,6 @@ vi.mock("sonner", () => ({ toast }));
 vi.mock("@/lib/shortcuts", async (importActual) => ({
   ...(await importActual<typeof import("@/lib/shortcuts")>()),
   useShortcuts: vi.fn(),
-  useCommand: vi.fn(),
 }));
 vi.mock("@/lib/use-modal-dialog", () => ({ useModalDialog: vi.fn() }));
 
@@ -104,6 +104,7 @@ const find = (
 });
 
 beforeEach(() => {
+  consumeFinderRequest();
   invalidateTopicSearchCache();
   vi.mocked(invalidateTopicSearchCache).mockClear();
   vi.useFakeTimers();
@@ -161,6 +162,23 @@ async function show(props: Parameters<typeof ArticleFinder>[0] = {}) {
     host.querySelector<HTMLButtonElement>("button[aria-haspopup]")?.click();
   });
 }
+
+it.each([
+  true,
+  false,
+])("opens Search requested before mount: %s, without replaying it on a later mount", async (beforeMount) => {
+  if (beforeMount) requestFinder();
+  await act(async () => root.render(<ArticleFinder />));
+  if (!beforeMount) await act(async () => requestFinder());
+  expect(
+    host.querySelector("button[aria-haspopup]")?.getAttribute("aria-expanded"),
+  ).toBe("true");
+  await act(async () => root.render(null));
+  await act(async () => root.render(<ArticleFinder />));
+  expect(
+    host.querySelector("button[aria-haspopup]")?.getAttribute("aria-expanded"),
+  ).toBe("false");
+});
 
 async function type(text: string) {
   const input = host.querySelector("input") as HTMLInputElement;

@@ -36,7 +36,14 @@ export default function DeskLayout({ children }: { children: ReactNode }) {
         {children}
       </div>
       <LegalFooter />
-      <Suspense fallback={null}>
+      <Suspense
+        fallback={
+          <div
+            aria-hidden="true"
+            className="md:hidden shrink-0 h-[calc(3.5rem+env(safe-area-inset-bottom)+1px)]"
+          />
+        }
+      >
         <MobileNav />
       </Suspense>
     </div>
