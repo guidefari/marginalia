@@ -1,17 +1,23 @@
 "use client";
 import { api } from "@marginalia/backend/convex/_generated/api";
 import { formatPages } from "@marginalia/backend/reading-pages";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocalToday } from "./reading-room/use-local-today";
 
 export function usePageOverview(days = 30) {
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const enabled = isAuthenticated && !isLoading;
   const [timeZone, setTimeZone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
   const today = useLocalToday(timeZone);
-  const data = useQuery(api.readingPages.overview, { timeZone, today, days });
+  const overview = useQuery(
+    api.readingPages.overview,
+    enabled ? { timeZone, today, days } : "skip",
+  );
+  const data = enabled ? overview : undefined;
   useEffect(() => {
     if (data?.timeZone) setTimeZone(data.timeZone);
   }, [data?.timeZone]);
@@ -56,7 +62,10 @@ export function PageGoalCelebration() {
     };
   }, [today, zone, initialized, initialize, retry]);
   useEffect(() => {
-    if (!data) return;
+    if (!data) {
+      previous.current = null;
+      return;
+    }
     const row = data.history.find((entry) => entry.day === data.today);
     const next = {
       day: data.today,
@@ -89,7 +98,7 @@ export function PageGoalCelebration() {
         /* Achievement remains visible; do not replay an old celebration. */
       });
   }, [data, claim]);
-  return error ? (
+  return data && error ? (
     <p role="status" className="px-4 py-2 text-xs text-[var(--ink-muted)]">
       Daily page tracking could not start.{" "}
       <button

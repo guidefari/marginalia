@@ -22,6 +22,8 @@ vi.mock("@marginalia/backend/convex/_generated/api", () => ({
 }));
 
 const state = vi.hoisted(() => ({
+  auth: { isAuthenticated: true, isLoading: false },
+  queries: vi.fn(),
   data: {
     today: "2026-11-02",
     timeZone: "UTC",
@@ -46,7 +48,14 @@ const state = vi.hoisted(() => ({
   toast: vi.fn(),
 }));
 vi.mock("convex/react", () => ({
-  useQuery: () => state.data,
+  useConvexAuth: () => state.auth,
+  useQuery: (_reference: unknown, args: unknown) => {
+    state.queries(args);
+    if (args === "skip") return undefined;
+    if (!state.auth.isAuthenticated || state.auth.isLoading)
+      throw new Error("Protected query started before authentication");
+    return state.data;
+  },
   useMutation: (reference: unknown) =>
     reference === api.readingPages.setGoal
       ? state.save
@@ -61,6 +70,8 @@ vi.mock("./reading-room/use-local-today", () => ({
 let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
+  state.auth = { isAuthenticated: true, isLoading: false };
+  state.queries.mockClear();
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
   state.save.mockReset();
   state.save.mockResolvedValue(null);
@@ -101,6 +112,55 @@ const click = async (text: string) =>
   });
 
 describe("daily page goal surfaces", () => {
+  it.each([
+    { isAuthenticated: false, isLoading: false },
+    { isAuthenticated: false, isLoading: true },
+    { isAuthenticated: true, isLoading: true },
+  ])("keeps public initial content free of protected queries and initialization during auth state %j", async (auth) => {
+    state.auth = auth;
+    state.data = { ...state.data, history: [] };
+    await render(
+      <>
+        <p>Public legal or help content</p>
+        <PageGoalCelebration />
+      </>,
+    );
+    expect(host.textContent).toBe("Public legal or help content");
+    expect(state.queries.mock.calls.length).toBeGreaterThan(0);
+    expect(state.queries.mock.calls.every(([args]) => args === "skip")).toBe(
+      true,
+    );
+    expect(state.initialize).not.toHaveBeenCalled();
+    expect(state.claim).not.toHaveBeenCalled();
+  });
+  it("subscribes and initializes the day normally once authenticated", async () => {
+    state.data = { ...state.data, history: [] };
+    await render(<PageGoalCelebration />);
+    expect(state.queries).toHaveBeenCalledWith({
+      timeZone: "UTC",
+      today: "2026-11-02",
+      days: 1,
+    });
+    expect(state.initialize).toHaveBeenCalledExactlyOnceWith({
+      timeZone: "UTC",
+    });
+    expect(state.claim).not.toHaveBeenCalled();
+  });
+  it("does not carry an achievement transition across sign-out and subsequent hydration", async () => {
+    await render(<PageGoalCelebration />);
+    state.auth = { isAuthenticated: false, isLoading: false };
+    await render(<PageGoalCelebration />);
+    state.data = {
+      ...state.data,
+      history: [
+        { ...state.data.history[0], creditedWords: 3000, achievedAt: 1 },
+      ],
+    };
+    state.auth = { isAuthenticated: true, isLoading: false };
+    await render(<PageGoalCelebration />);
+    expect(state.claim).not.toHaveBeenCalled();
+    expect(state.toast).not.toHaveBeenCalled();
+  });
   it("does not celebrate optimistic rounding; celebrates an acknowledged crossing once without taking focus", async () => {
     await render(
       <>
