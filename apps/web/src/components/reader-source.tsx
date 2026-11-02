@@ -11,6 +11,7 @@ export function ReaderSource({
   feed: { _id: Id<"feeds">; title: string; isActive: boolean };
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const confirmationId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const close = () => {
@@ -25,7 +26,7 @@ export function ReaderSource({
         if (confirming && event.key === "Escape") {
           event.preventDefault();
           event.stopPropagation();
-          if (event.target === trigger.current) close();
+          if (!removing && event.target === trigger.current) close();
         }
       }}
     >
@@ -46,8 +47,9 @@ export function ReaderSource({
           aria-label={`Unsubscribe from ${feed.title}`}
           aria-expanded={confirming}
           aria-controls={confirming ? confirmationId : undefined}
+          disabled={removing}
           onClick={() => setConfirming((open) => !open)}
-          className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-[var(--ink)]"
+          className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-[var(--ink)] disabled:opacity-40"
         >
           Unsubscribe
         </button>
@@ -59,7 +61,11 @@ export function ReaderSource({
           data-reader-overlay=""
           className="text-[var(--reader-fg)]"
         >
-          <RemoveFeedConfirm feed={feed} onClose={close} />
+          <RemoveFeedConfirm
+            feed={feed}
+            onClose={close}
+            onRemovingChange={setRemoving}
+          />
         </section>
       )}
     </div>

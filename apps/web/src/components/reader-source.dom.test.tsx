@@ -102,6 +102,37 @@ describe("reader source", () => {
     expect(mocks.remove).toHaveBeenCalledTimes(2);
   });
 
+  it("cannot dismiss a pending removal through the trigger or Escape", async () => {
+    let rejectRemoval: (error: Error) => void = () => {};
+    mocks.remove.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectRemoval = reject;
+        }),
+    );
+    await render();
+    await act(async () => button("Unsubscribe").click());
+    await act(async () => button("Remove").click());
+    const trigger = button("Unsubscribe");
+    expect(trigger.disabled).toBe(true);
+    await act(async () => {
+      trigger.click();
+      trigger.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(button("Removing…")).toBeDefined();
+    await act(async () => rejectRemoval(new Error("offline")));
+    expect(trigger.disabled).toBe(false);
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+      "Couldn't remove the feed",
+    );
+    await act(async () => button("Remove").click());
+    expect(mocks.remove).toHaveBeenCalledTimes(2);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("gives Escape to the confirmation rather than leaving the article", async () => {
     await render();
     await act(async () => button("Unsubscribe").click());
