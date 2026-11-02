@@ -77,15 +77,18 @@ function cleanedSpokenBlock(
   // Clean joined prose so citations spanning inline markup are removed too.
   // Hold exact code and math aside: arr[12] is not a citation.
   const protectedText: string[] = [];
+  const original = clone.textContent ?? "";
+  let marker = crypto.randomUUID();
+  while (original.includes(marker)) marker = crypto.randomUUID();
   for (const element of clone.querySelectorAll("code, math")) {
     if (!clone.contains(element)) continue;
     const slot = protectedText.push(element.textContent ?? "") - 1;
-    element.replaceWith(`\uE000${slot}\uE001`);
+    element.replaceWith(`\uE000${marker}:${slot}\uE001`);
   }
   let text = paragraphText(clone)
     .replace(BRACKETED_NUMBER, "")
     .replace(
-      /\uE000(\d+)\uE001/g,
+      new RegExp(`\uE000${marker}:(\\d+)\uE001`, "g"),
       (_, slot) => protectedText[Number(slot)] ?? "",
     )
     .replace(BARE_URL, linkSentence)

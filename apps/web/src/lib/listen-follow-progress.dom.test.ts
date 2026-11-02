@@ -94,6 +94,20 @@ afterEach(() => {
 });
 
 describe("spoken progress within a source block", () => {
+  it("releases Follow when a wheel gesture chains past the end of a contained scroller", () => {
+    scrollTo.mockImplementation(() => {});
+    const { el } = block(2000, 2400);
+    follower.reveal(el, 0);
+    const panel = document.createElement("div");
+    panel.style.overflowY = "auto";
+    Object.defineProperty(panel, "scrollHeight", { value: 600 });
+    Object.defineProperty(panel, "clientHeight", { value: 100 });
+    panel.scrollTop = 500;
+    document.body.append(panel);
+    panel.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: 50 }));
+    move(100);
+    expect(follower.following).toBe(false);
+  });
   it("does not mistake input inside a contained scroller for document browsing mid-flight", () => {
     scrollTo.mockImplementation(() => {});
     const { el } = block(2000, 2400);

@@ -18,6 +18,14 @@ function entries(html: string) {
 }
 
 describe("source-linked narration inventory", () => {
+  it("preserves literal private-use placeholder sequences alongside protected code", () => {
+    entries(
+      '<p data-para="1">Literal \uE00012\uE001 and <code>arr[12]</code>, citation[<a>3</a>].</p>',
+    );
+    expect(spokenBlock(document.querySelector("p")!)?.text).toBe(
+      "Literal \uE00012\uE001 and arr[12], citation.",
+    );
+  });
   it("cleans citations and line breaks in table cells and discloses cell images", () => {
     const [table] = entries(
       '<table><tr><th>Place</th><th>Detail</th></tr><tr><td>North<br>West[<a href="#n">1</a>]</td><td>2025<sup>2</sup><img src="chart.png"></td></tr></table>',

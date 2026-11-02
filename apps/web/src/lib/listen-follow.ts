@@ -264,8 +264,20 @@ export function createFollower(onChange: () => void): Follower {
         if (
           /(auto|scroll)/.test(style.overflowY) &&
           element.scrollHeight > element.clientHeight
-        )
-          return;
+        ) {
+          if (!(event instanceof WheelEvent)) return;
+          const canConsume =
+            event.deltaY > 0
+              ? element.scrollTop + element.clientHeight < element.scrollHeight
+              : event.deltaY < 0 && element.scrollTop > 0;
+          if (
+            canConsume ||
+            event.deltaY === 0 ||
+            /^(contain|none)$/.test(style.overscrollBehaviorY)
+          )
+            return;
+          // At an edge, an uncontained wheel can chain into document browsing.
+        }
         element = element.parentElement;
       }
     }

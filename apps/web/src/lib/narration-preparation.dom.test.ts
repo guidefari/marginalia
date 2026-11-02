@@ -2,6 +2,7 @@
 
 import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getConvexToken } from "./convex-token";
 import {
   createTextPreparer,
   requestNarrationPreparation,
@@ -13,7 +14,7 @@ const session = vi.hoisted(() => ({
   generation: 1,
 }));
 vi.mock("./convex-token", () => ({
-  getConvexToken: async () => session.token,
+  getConvexToken: vi.fn(async () => session.token),
   tokenSessionGeneration: () => session.generation,
 }));
 const articleId = "a1" as never;
@@ -21,6 +22,9 @@ const signal = () => new AbortController().signal;
 beforeEach(() => {
   session.token = "reader-one";
   session.generation = 1;
+  vi.mocked(getConvexToken)
+    .mockReset()
+    .mockImplementation(async () => session.token);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -28,6 +32,17 @@ afterEach(() => {
 });
 
 describe("narration preparation before synthesis", () => {
+  it("retries one discarded token fetch without misreporting a same-session refresh as sign-out", async () => {
+    vi.mocked(getConvexToken)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce("fresh-jwt");
+    const request = vi.fn(async () => ({ text: "Prepared.", version: "v1" }));
+    await expect(
+      createTextPreparer(articleId, request)("Source.", signal()),
+    ).resolves.toBe("Prepared.");
+    expect(getConvexToken).toHaveBeenCalledTimes(2);
+    expect(request).toHaveBeenCalledWith(expect.any(Object), "fresh-jwt");
+  });
   it("sends only prepared words to TTS, retaining the source block kind", async () => {
     const request = vi.fn(async () => ({
       text: "Here's the short version.",

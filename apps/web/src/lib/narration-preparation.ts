@@ -50,7 +50,13 @@ export function createTextPreparer(
       cache.clear();
       cacheGeneration = generation;
     }
-    const token = await getConvexToken(undefined, undefined, signal);
+    let token = await getConvexToken(undefined, undefined, signal);
+    signal.throwIfAborted();
+    if (tokenSessionGeneration() !== generation)
+      throw new DOMException("The reader session changed.", "AbortError");
+    // A concurrent auth rejection can discard a refresh without signing out.
+    // Retry that null once, still fenced to this session and caller signal.
+    if (!token) token = await getConvexToken(undefined, undefined, signal);
     signal.throwIfAborted();
     if (tokenSessionGeneration() !== generation)
       throw new DOMException("The reader session changed.", "AbortError");
