@@ -26,12 +26,15 @@ describe("registration feedback", () => {
       field: "password",
       message: PASSWORD_LENGTH_HINT,
     });
-    expect(registrationFailure({ code: "PASSWORD_TOO_LONG" }, mode).field).toBe(
-      "password",
-    );
-    expect(registrationFailure({ code: "INVALID_EMAIL" }, mode).field).toBe(
-      "email",
-    );
+    expect(registrationFailure({ code: "PASSWORD_TOO_LONG" }, mode)).toEqual({
+      field: "password",
+      message:
+        "This password is too long. Choose a shorter password and try again.",
+    });
+    expect(registrationFailure({ code: "INVALID_EMAIL" }, mode)).toEqual({
+      field: "email",
+      message: "Enter a valid email address.",
+    });
   });
 
   it("keeps invitation and owner recovery instructions distinct", () => {
@@ -43,10 +46,32 @@ describe("registration feedback", () => {
     ).toContain("deployment administrator");
   });
 
-  it("does not disclose whether an account exists", () => {
-    expect(
-      registrationFailure({ code: "USER_ALREADY_EXISTS" }, "invite"),
-    ).toEqual(registrationFailure({ code: "UNKNOWN" }, "invite"));
+  it.each([
+    {
+      mode: "invite",
+      message:
+        "Couldn't create your account. Try again, or ask the owner for a new invitation.",
+    },
+    {
+      mode: "owner",
+      message:
+        "Couldn't claim the reader. Try again, or ask the deployment administrator for a new setup link.",
+    },
+  ] satisfies readonly {
+    mode: "invite" | "owner";
+    message: string;
+  }[])("does not disclose whether an account exists in $mode mode", ({
+    mode,
+    message,
+  }) => {
+    expect(registrationFailure({ code: "USER_ALREADY_EXISTS" }, mode)).toEqual({
+      field: null,
+      message,
+    });
+    expect(registrationFailure({ code: "UNKNOWN" }, mode)).toEqual({
+      field: null,
+      message,
+    });
   });
 
   it("gives rate limits their own retry guidance", () => {
