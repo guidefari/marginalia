@@ -10,15 +10,22 @@ import {
   type ReactNode,
   type SetStateAction,
   useEffect,
+  useId,
   useRef,
   useState,
 } from "react";
 import { toast } from "sonner";
+import { AuthPasswordField } from "@/components/auth-password-field";
 import { LegalFooter } from "@/components/legal-footer";
 import { PageGoalCelebration } from "@/components/page-goal";
 import { ReaderOpening } from "@/components/reader-opening";
 import { SourceLink } from "@/components/source-link";
 import { authClient } from "@/lib/auth-client";
+import {
+  type RegistrationIssue,
+  registrationFailure,
+  registrationPasswordIssue,
+} from "@/lib/auth-registration";
 import { rearmAuth } from "@/lib/auth-retry";
 import {
   LINE_HEIGHTS,
@@ -315,6 +322,9 @@ function SignIn({
   const [backup, setBackup] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [errorField, setErrorField] =
+    useState<RegistrationIssue["field"]>(null);
+  const emailErrorId = useId();
   useEffect(() => {
     if (!fragment) return;
     const invited = fragment.invite;
@@ -348,19 +358,41 @@ function SignIn({
   }, [step]);
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
+    const form = event.currentTarget;
+    const fields = new FormData(form);
+    const showIssue = (issue: RegistrationIssue) => {
+      setError(issue.message);
+      setErrorField(issue.field);
+      if (issue.field)
+        form
+          .querySelector<HTMLInputElement>(`input[name="${issue.field}"]`)
+          ?.focus();
+    };
+    if (signingUp && !factor) {
+      const issue = registrationPasswordIssue(
+        String(fields.get("password") ?? ""),
+      );
+      if (issue) {
+        showIssue(issue);
+        return;
+      }
+    }
     setBusy(true);
     setError("");
-    const fields = new FormData(event.currentTarget);
+    setErrorField(null);
     try {
       if (factor) {
         const code = String(fields.get("code") ?? "").trim();
         const result = backup
           ? await authClient.twoFactor.verifyBackupCode({ code })
           : await authClient.twoFactor.verifyTotp({ code });
-        if (result.error)
-          throw new Error(
+        if (result.error) {
+          setError(
             "That code wasn't accepted. Try a fresh code or a recovery code.",
           );
+          return;
+        }
       } else {
         const email = String(fields.get("email") ?? "").trim();
         const password = String(fields.get("password") ?? "");
@@ -377,14 +409,17 @@ function SignIn({
               },
             })
           : await authClient.signIn.email({ email, password });
-        if (result.error)
-          throw new Error(
-            invite
-              ? "Couldn't create your account. Use the email your invite was sent for, a password of at least 12 characters, and a link that hasn't expired."
-              : setup
-                ? "Couldn't claim the reader. Check your setup link and use a password of at least 12 characters."
-                : "Couldn't sign in. Check your email and password, or try your passkey.",
-          );
+        if (result.error) {
+          if (signingUp)
+            showIssue(
+              registrationFailure(result.error, invite ? "invite" : "owner"),
+            );
+          else
+            setError(
+              "Couldn't sign in. Check your email and password, or try your passkey.",
+            );
+          return;
+        }
         if (
           result.data &&
           "twoFactorRedirect" in result.data &&
@@ -396,8 +431,10 @@ function SignIn({
           setInvite("");
         }
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't sign in. Try again.");
+    } catch {
+      setError(
+        "Couldn't reach the sign-in service. Check your connection and try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -462,7 +499,12 @@ function SignIn({
           </button>
         )}
         {(passwordForm || factor) && (
-          <form ref={formRef} onSubmit={submit} className="space-y-4">
+          <form
+            ref={formRef}
+            onSubmit={submit}
+            aria-busy={busy}
+            className="space-y-4"
+          >
             {factor ? (
               <label className="block text-sm">
                 {backup ? "Recovery code" : "Authenticator code"}
@@ -495,22 +537,34 @@ function SignIn({
                     name="email"
                     type="email"
                     autoComplete="username webauthn"
-                    required
-                  />
-                </label>
-                <label className="block text-sm">
-                  Password
-                  <input
-                    className="app-input mt-2"
-                    name="password"
-                    type="password"
-                    autoComplete={
-                      signingUp ? "new-password" : "current-password"
+                    aria-invalid={errorField === "email" ? true : undefined}
+                    aria-describedby={
+                      errorField === "email" ? emailErrorId : undefined
                     }
-                    minLength={signingUp ? 12 : undefined}
+                    onInput={() => {
+                      if (errorField === "email") {
+                        setError("");
+                        setErrorField(null);
+                      }
+                    }}
                     required
                   />
                 </label>
+                {errorField === "email" && (
+                  <p id={emailErrorId} role="alert" className="text-sm">
+                    {error}
+                  </p>
+                )}
+                <AuthPasswordField
+                  signingUp={signingUp}
+                  error={errorField === "password" ? error : ""}
+                  onInput={() => {
+                    if (errorField === "password") {
+                      setError("");
+                      setErrorField(null);
+                    }
+                  }}
+                />
               </>
             )}
             <button className="app-button w-full" disabled={busy}>
@@ -558,7 +612,7 @@ function SignIn({
             Request access
           </button>
         )}
-        {error && (
+        {error && !errorField && (
           <p role="alert" className="mt-4 text-sm text-[var(--reader-fg)]">
             {error}
           </p>

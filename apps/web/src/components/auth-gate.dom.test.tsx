@@ -197,6 +197,58 @@ describe("one-time tokens in the URL", () => {
 });
 
 describe("sign-in focus transitions", () => {
+  it("explains the password minimum and toggles visibility without losing the password", async () => {
+    history.replaceState(null, "", "/#setup=fixture-token");
+    await act(async () => root.render(<AuthGate>desk</AuthGate>));
+    const password = document.querySelector<HTMLInputElement>(
+      'input[name="password"]',
+    );
+    if (!password) throw new Error("Password field missing");
+    const hintId = password.getAttribute("aria-describedby");
+    expect(hintId && document.getElementById(hintId)?.textContent).toBe(
+      "Use at least 12 characters.",
+    );
+    expect(password.autocomplete).toBe("new-password");
+    password.value = "fixture password";
+    const toggle = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Show password"]',
+    );
+    if (!toggle) throw new Error("Password visibility control missing");
+    await act(async () => toggle.click());
+    expect(password.type).toBe("text");
+    expect(password.value).toBe("fixture password");
+    await act(async () => toggle.click());
+    expect(password.type).toBe("password");
+  });
+
+  it("catches a short autofilled registration password and links the error to its field", async () => {
+    history.replaceState(null, "", "/#setup=fixture-token");
+    await act(async () => root.render(<AuthGate>desk</AuthGate>));
+    const password = document.querySelector<HTMLInputElement>(
+      'input[name="password"]',
+    );
+    const form = document.querySelector("form");
+    if (!password || !form) throw new Error("Registration form missing");
+    password.value = "short";
+    await act(async () =>
+      form.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      ),
+    );
+    expect(password.getAttribute("aria-invalid")).toBe("true");
+    const error = document.querySelector('[role="alert"]');
+    expect(error?.textContent).toBe("Use at least 12 characters.");
+    expect(password.getAttribute("aria-describedby")).toContain(error?.id);
+    expect(document.activeElement).toBe(password);
+    expect(form.getAttribute("aria-busy")).toBe("false");
+    await act(async () => {
+      password.value = "a longer fixture password";
+      password.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(password.hasAttribute("aria-invalid")).toBe(false);
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+  });
+
   function button(label: string) {
     const control = [...document.querySelectorAll("button")].find(
       (element) => element.textContent === label,
