@@ -221,6 +221,28 @@ describe("sign-in focus transitions", () => {
     expect(password.type).toBe("password");
   });
 
+  it("shows field-linked feedback through normal registration form submission", async () => {
+    history.replaceState(null, "", "/#setup=fixture-token");
+    await act(async () => root.render(<AuthGate>desk</AuthGate>));
+    const email = document.querySelector<HTMLInputElement>(
+      'input[name="email"]',
+    );
+    const password = document.querySelector<HTMLInputElement>(
+      'input[name="password"]',
+    );
+    const form = document.querySelector("form");
+    if (!email || !password || !form)
+      throw new Error("Registration form missing");
+    email.value = "review@example.invalid";
+    password.value = "short-demo";
+    await act(async () => form.requestSubmit());
+    expect(password.getAttribute("aria-invalid")).toBe("true");
+    const error = document.querySelector('[role="alert"]');
+    expect(error?.textContent).toBe("Use at least 12 characters.");
+    expect(password.getAttribute("aria-describedby")).toBe(error?.id);
+    expect(document.activeElement).toBe(password);
+  });
+
   it("catches a short autofilled registration password and links the error to its field", async () => {
     history.replaceState(null, "", "/#setup=fixture-token");
     await act(async () => root.render(<AuthGate>desk</AuthGate>));

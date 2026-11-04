@@ -2,10 +2,7 @@
 
 import { Eye, EyeOff } from "lucide-react";
 import { useId, useState } from "react";
-import {
-  MIN_PASSWORD_LENGTH,
-  PASSWORD_LENGTH_HINT,
-} from "@/lib/auth-registration";
+import { PASSWORD_LENGTH_HINT } from "@/lib/auth-registration";
 
 export function AuthPasswordField({
   signingUp,
@@ -32,7 +29,6 @@ export function AuthPasswordField({
           name="password"
           type={visible ? "text" : "password"}
           autoComplete={signingUp ? "new-password" : "current-password"}
-          minLength={signingUp ? MIN_PASSWORD_LENGTH : undefined}
           aria-describedby={describedBy}
           aria-invalid={error ? true : undefined}
           onInput={onInput}
