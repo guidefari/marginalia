@@ -1,5 +1,6 @@
 "use client";
 
+import { Eye, EyeOff } from "lucide-react";
 import { useId, useState } from "react";
 import {
   MIN_PASSWORD_LENGTH,
@@ -26,10 +27,10 @@ export function AuthPasswordField({
   return (
     <div className="text-sm">
       <label htmlFor={id}>Password</label>
-      <div className="mt-2 flex gap-2">
+      <div className="app-input mt-2 !flex items-center !p-0 focus-within:outline focus-within:outline-1 focus-within:outline-offset-2 focus-within:outline-[var(--reader-border-strong)]">
         <input
           id={id}
-          className="app-input min-w-0 flex-1"
+          className="min-w-0 flex-1 rounded-l-[9px] bg-transparent px-3 py-2.5 text-base !outline-none"
           name="password"
           type={visible ? "text" : "password"}
           autoComplete={signingUp ? "new-password" : "current-password"}
@@ -41,12 +42,16 @@ export function AuthPasswordField({
         />
         <button
           type="button"
-          className="min-h-11 min-w-16 shrink-0 rounded-md px-3 text-sm text-[var(--reader-fg-soft)]"
+          className="mr-px flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-[var(--reader-muted)] hover:text-[var(--reader-fg)]"
           aria-label={visible ? "Hide password" : "Show password"}
           aria-controls={id}
           onClick={() => setVisible(!visible)}
         >
-          {visible ? "Hide" : "Show"}
+          {visible ? (
+            <EyeOff size={18} aria-hidden />
+          ) : (
+            <Eye size={18} aria-hidden />
+          )}
         </button>
       </div>
       {signingUp && (
