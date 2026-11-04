@@ -303,6 +303,10 @@ export async function deleteArticle(
   });
   await removeFromQueueStats(ctx, article);
   await ctx.db.delete("articles", article._id);
+  await ctx.scheduler.runAfter(0, internal.bookImages.discard, {
+    userId: article.userId,
+    articleId: article._id,
+  });
   // Parent absence immediately fences publication and reader access. Each
   // cleanup transaction reads/deletes at most one potentially 1 MiB child;
   // generic writer pre/post reads are included in that bound.

@@ -4,6 +4,7 @@ import type { Id, TableNames } from "./_generated/dataModel";
 import { revokeSessions } from "./access";
 import { purgeForReader as purgeArticleImportKeys } from "./articleImportKeys";
 import { purgeArticleMetadata } from "./articleMetadata";
+import { purgeImages } from "./bookImages";
 import { internalMutation, type MutationCtx, mutation } from "./functions";
 import { purgeLegacyMarkDefaults } from "./highlights";
 import { DEFAULT_USER_ID } from "./lib/constants";
@@ -439,7 +440,8 @@ const STEPS: Step[] = [
       }
       await ctx.db.delete(row._id);
     }
-    return imports.length;
+    if (imports.length) return imports.length;
+    return purgeImages(ctx, userId);
   },
   rows((ctx, u) =>
     ctx.db

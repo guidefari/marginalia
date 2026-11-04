@@ -8,7 +8,7 @@
 
 ## For BK (through Guide)
 
-- **Q4.** Each schema addition in [01](01-plan.md) Phases 2 and 4, before deploy.
+- **Q4, partly answered.** Guide approved local implementation of the Phase 2 import schema in D-EPUB-018. Backend deployment still needs explicit approval. Phase 4 annotation schema remains unapproved.
 - **Q5.** EPUB size cap and image storage per account, since images count against the deployment.
 
 ## Verify in code before Phase 1

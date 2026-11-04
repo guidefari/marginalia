@@ -671,6 +671,7 @@ export default defineSchema({
   // A PDF on its way in: the desk shows its steps, and a failure keeps its
   // reason here so nothing else is left half-imported (documentImports.ts).
   documentImports: defineTable({
+    format: v.optional(v.union(v.literal("pdf"), v.literal("epub"))),
     processingStartedAt: v.optional(v.number()),
     userId: v.string(),
     storageId: v.id("_storage"),
@@ -693,6 +694,8 @@ export default defineSchema({
     failure: v.optional(
       v.union(
         v.literal("scanned"),
+        v.literal("protected"),
+        v.literal("not_epub"),
         v.literal("too_long"),
         v.literal("unreadable"),
         v.literal("empty"),
@@ -764,6 +767,15 @@ export default defineSchema({
   ]),
 
   bookUnits: defineTable({
+    sourceSpans: v.optional(
+      v.array(
+        v.object({
+          spineIndex: v.number(),
+          start: v.number(),
+          end: v.number(),
+        }),
+      ),
+    ),
     userId: v.string(),
     articleId: v.id("articles"),
     index: v.number(),
@@ -789,6 +801,15 @@ export default defineSchema({
     "articleId",
     "index",
   ]),
+
+  bookImages: defineTable({
+    userId: v.string(),
+    articleId: v.id("articles"),
+    storageId: v.id("_storage"),
+    href: v.string(),
+  })
+    .index("by_userId_and_articleId", ["userId", "articleId"])
+    .index("by_storageId", ["storageId"]),
 
   // Where a book's indexing has got (bookIndex.ts): summaries and passages
   // share a paced queue; the book's one point waits for settled summaries.

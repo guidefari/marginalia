@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { libraryIsActive, ownedArticle } from "./access";
 import { unitSummaries } from "./bookIndex";
-import { liveImport, markImportReady } from "./documentImports";
+import { deleteFile, liveImport, markImportReady } from "./documentImports";
 import {
   internalMutation,
   internalQuery,
@@ -30,6 +30,15 @@ const outlineEntry = v.object({
 });
 
 const unitFields = {
+  sourceSpans: v.optional(
+    v.array(
+      v.object({
+        spineIndex: v.number(),
+        start: v.number(),
+        end: v.number(),
+      }),
+    ),
+  ),
   index: v.number(),
   title: v.string(),
   chapter: v.optional(v.string()),
@@ -348,7 +357,7 @@ export const createBookArticle = internalMutation({
     author: v.optional(v.string()),
     excerpt: v.string(),
     fileName: v.string(),
-    pageCount: v.number(),
+    pageCount: v.optional(v.number()),
     wordCount: v.number(),
     estimatedReadMinutes: v.number(),
     outline: v.array(outlineEntry),
@@ -413,7 +422,7 @@ export const finishBook = internalMutation({
     embedding: v.optional(v.array(v.float64())),
     // What the import row shows once it is ready
     title: v.string(),
-    pages: v.number(),
+    pages: v.optional(v.number()),
     units: v.number(),
     firstUnitTitle: v.string(),
     firstUnitMinutes: v.number(),
@@ -480,6 +489,20 @@ export const discardBook = internalMutation({
     // A stale import action must never clean up a book already published by
     // another delivery of that import. Optional indexing is not import work.
     if (article?.extractionStatus === "extracted") return;
+    const images = await ctx.db
+      .query("bookImages")
+      .withIndex("by_userId_and_articleId", (q) =>
+        q.eq("userId", args.userId).eq("articleId", args.articleId),
+      )
+      .take(50);
+    for (const image of images) {
+      await deleteFile(ctx, image.storageId);
+      await ctx.db.delete(image._id);
+    }
+    if (images.length === 50) {
+      await ctx.scheduler.runAfter(0, internal.books.discardBook, args);
+      return;
+    }
     if (article) {
       const units = await ctx.db
         .query("bookUnits")

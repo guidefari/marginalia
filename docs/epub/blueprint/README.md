@@ -27,7 +27,9 @@ Related: the design blueprint ([../../design/blueprint/README.md](../../design/b
 
 ## Build status
 
-The first EPUB PR includes this blueprint and the pure parser, stacked on auth PR #95 (D-EPUB-015, D-EPUB-016). There is no separate docs PR. Uploads, reader integration, schema additions and the CLI remain planned, not shipped. Apple purple maps to the existing `cobalt` colour (D-EPUB-017); footnote PR scope remains open.
+The first EPUB PR includes this blueprint and the pure parser, stacked on auth PR #95 (D-EPUB-015, D-EPUB-016). There is no separate docs PR. Apple purple maps to the existing `cobalt` colour (D-EPUB-017); footnote PR scope remains open.
+
+The next branch, `feat/epub-import-backend`, implements the approved backend schema, format selection, book publication and image ownership/cleanup locally (D-EPUB-018). It is not deployed. The desk remains PDF-only apart from compatibility guards for the widened import result. The EPUB picker, layout work, token endpoints and Apple Books CLI remain future slices.
 
 ## Rules for coding agents
 

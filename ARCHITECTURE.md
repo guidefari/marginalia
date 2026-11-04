@@ -31,6 +31,16 @@ Reading candidates require extracted, nonempty content and exclude finished sour
 
 Articles render through `@planetaryescape/reader`. The package inserts whatever HTML its `sanitize` callback returns, so Marginalia's trust policy lives in `components/article-renderer.tsx` (DOMPurify via `lib/sanitize.ts`). Saved highlights and companion passages are re-anchored against article text; paragraph navigation uses the rendered article body. `lib/paragraphs.ts`, `lib/text-range.ts`, `lib/highlights.ts` and `lib/reader-settings.ts` re-export the package so app imports stay stable. Change article markup or anchoring in the package, then bump its tag in `apps/web/package.json`.
 
+### EPUB backend import, not deployed
+
+`documentImports.generateUploadUrl` and `start` accept an optional format; omitted format keeps the existing PDF path. Both paths bind uploads to the reader's SHA-256 and byte-size grant. Admission and start independently enforce the EPUB parser's 32 MiB ZIP ceiling; PDF keeps its 60 MiB ceiling. `actions/importEpub.ts` parses EPUB bytes through `lib/epub/parse.ts` and always creates a book, using the same claim, pending article, guarded unit writes and atomic publication lifecycle as PDF books. EPUBs have no fabricated page count. Unit `sourceSpans` retain half-open UTF-16 ranges in normalized spine text, not raw XHTML or reader paragraph offsets.
+
+The action stores supported raster resources and registers each file in `bookImages` before any unit references its URL. Registration checks the live import and pending owned article in one mutation. Missing or unsupported images become escaped alt text. Unit writes are bounded by count and serialized bytes, and final HTML plus text is checked after URL replacement. Publication marks the book and import ready together and removes the uploaded EPUB.
+
+`documentImports.sweepUploads` preserves storage claimed by either an import or a book image. A file stored just before an action dies remains unclaimed and is removed after the existing orphan grace period. Failed/expired imports use `books.discardBook`; article deletion and account deletion also drain image rows and blobs in bounded batches. Account deletion keeps its existing numeric purge-step positions.
+
+This is backend support, not the desk EPUB picker or token upload API. The desk remains PDF-only and excludes EPUB import events from its status and auto-open logic. Publisher layout reduction, semantic footnotes and Apple Books annotation placement remain later work. See the [EPUB blueprint](docs/epub/blueprint/README.md) and [limits](docs/limitations.md#epub-backend-import-not-deployed).
+
 ## Estimated-page accounting
 
 `readingPages.ts` owns prospective article page equivalents (300 words/page), optional goals and an exact daily ledger. The reader snapshots a bounded numbered-paragraph word manifest against saved prose identity. `page-coverage.ts` approximates exposed text with cells of up to eight words and consumes one shared active visual-reading allowance (220 words/minute); it does not sum the legacy per-paragraph dwell durations. No new arithmetic or tracking dependency is used.
