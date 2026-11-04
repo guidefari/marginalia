@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { type FunctionReference, getFunctionName } from "convex/server";
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { rememberTitle } from "@/lib/title-handoff";
@@ -85,6 +85,22 @@ afterEach(async () => {
 });
 
 describe("one-time tokens in the URL", () => {
+  it.each([
+    ["setup", "Claim my reader"],
+    ["invite", "Create my account"],
+  ])("retains %s registration during development effect replay", async (kind, label) => {
+    history.replaceState(null, "", `/#${kind}=test-registration-token`);
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <AuthGate>Private content</AuthGate>
+        </StrictMode>,
+      ),
+    );
+    expect(location.hash).toBe("");
+    expect(document.body.textContent).toContain(label);
+    expect(document.body.textContent).not.toContain("Private content");
+  });
   it.each([
     "/privacy",
     "/terms",

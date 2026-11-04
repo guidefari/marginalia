@@ -119,7 +119,12 @@ function ReaderAccessGate({
   );
   // Stripped on every load, signed in or not; only sign-up uses them
   const [fragment, setFragment] = useState<FragmentTokens | null>(null);
-  useEffect(() => setFragment(takeFragmentTokens(window)), []);
+  const fragmentCaptured = useRef(false);
+  useEffect(() => {
+    if (fragmentCaptured.current) return;
+    fragmentCaptured.current = true;
+    setFragment(takeFragmentTokens(window));
+  }, []);
   const checked = useRef(false);
   useEffect(() => {
     if (!fragment || isLoading) return;
