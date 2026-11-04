@@ -141,7 +141,11 @@
     "lane": "heavy",
     "cwd": "/Users/bhekanik/code/planetaryescape/.worktrees/marginalia-pool-1",
     "label": "01a186cb-cc82-76e1-9b3a-aa4974a385d8",
-    "command": ["bun", "test", "scripts/deep-study/runner.test.ts"]
+    "command": [
+      "bun",
+      "test",
+      "scripts/deep-study/runner.test.ts"
+    ]
   },
   {
     "enqueued_at": "2026-10-29T13:19:33.097471Z",
@@ -221,7 +225,13 @@
     "lane": "heavy",
     "cwd": "/Users/bhekanik/code/planetaryescape/.worktrees/marginalia-pool-1",
     "label": "01a1878e-5577-7b80-9975-0f3428dafa24",
-    "command": ["bun", "run", "--cwd", "packages/backend", "typecheck"]
+    "command": [
+      "bun",
+      "run",
+      "--cwd",
+      "packages/backend",
+      "typecheck"
+    ]
   },
   {
     "enqueued_at": "2026-10-29T13:24:26.108117Z",
@@ -293,7 +303,10 @@
     "lane": "heavy",
     "cwd": "/Users/bhekanik/code/planetaryescape/marginalia",
     "label": "01a186cb-cc82-76e1-9b3a-aa4974a385d8",
-    "command": ["/Users/bhekanik/.dotfiles/bin/agent-work", "_sweep"]
+    "command": [
+      "/Users/bhekanik/.dotfiles/bin/agent-work",
+      "_sweep"
+    ]
   },
   {
     "enqueued_at": "2026-10-29T13:44:50.385126Z",
@@ -353,7 +366,11 @@
     "lane": "heavy",
     "cwd": "/Users/bhekanik/code/planetaryescape/.worktrees/marginalia-pool-1",
     "label": "01a186cb-cc82-76e1-9b3a-aa4974a385d8",
-    "command": ["bun", "run", "typecheck"]
+    "command": [
+      "bun",
+      "run",
+      "typecheck"
+    ]
   },
   {
     "enqueued_at": "2026-10-29T13:46:18.323426Z",
@@ -363,7 +380,11 @@
     "lane": "heavy",
     "cwd": "/Users/bhekanik/code/planetaryescape/.worktrees/marginalia-pool-1",
     "label": "01a186cb-cc82-76e1-9b3a-aa4974a385d8",
-    "command": ["bun", "test", "scripts/deep-study/runner.test.ts"]
+    "command": [
+      "bun",
+      "test",
+      "scripts/deep-study/runner.test.ts"
+    ]
   },
   {
     "enqueued_at": "2026-10-29T13:46:17.131382Z",
@@ -404,7 +425,11 @@
     "lane": "light",
     "cwd": "/Users/bhekanik/code/planetaryescape/.worktrees/marginalia-pool-1",
     "label": "01a186cb-cc82-76e1-9b3a-aa4974a385d8",
-    "command": ["bun", "test", "scripts/deep-study/runner.test.ts"]
+    "command": [
+      "bun",
+      "test",
+      "scripts/deep-study/runner.test.ts"
+    ]
   },
   {
     "enqueued_at": "2026-10-29T13:58:42.712651Z",
@@ -432,6 +457,10 @@
     "lane": "heavy",
     "cwd": "/Users/bhekanik/code/planetaryescape/.worktrees/marginalia-pool-1/packages/backend",
     "label": "01a186cb-cc82-76e1-9b3a-aa4974a385d8",
-    "command": ["bun", "run", "typecheck"]
+    "command": [
+      "bun",
+      "run",
+      "typecheck"
+    ]
   }
 ]
