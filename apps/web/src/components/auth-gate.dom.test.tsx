@@ -238,7 +238,15 @@ describe("sign-in focus transitions", () => {
     expect(password.getAttribute("aria-invalid")).toBe("true");
     const error = document.querySelector('[role="alert"]');
     expect(error?.textContent).toBe("Use at least 12 characters.");
+    expect(
+      [...document.querySelectorAll("p")].filter(
+        (paragraph) => paragraph.textContent === "Use at least 12 characters.",
+      ),
+    ).toHaveLength(1);
     expect(password.getAttribute("aria-describedby")).toContain(error?.id);
+    for (const id of password.getAttribute("aria-describedby")?.split(" ") ??
+      [])
+      expect(document.getElementById(id)).not.toBeNull();
     expect(document.activeElement).toBe(password);
     expect(form.getAttribute("aria-busy")).toBe("false");
     await act(async () => {
@@ -247,6 +255,10 @@ describe("sign-in focus transitions", () => {
     });
     expect(password.hasAttribute("aria-invalid")).toBe(false);
     expect(document.querySelector('[role="alert"]')).toBeNull();
+    const hintId = password.getAttribute("aria-describedby");
+    expect(hintId && document.getElementById(hintId)?.textContent).toBe(
+      "Use at least 12 characters.",
+    );
   });
 
   function button(label: string) {

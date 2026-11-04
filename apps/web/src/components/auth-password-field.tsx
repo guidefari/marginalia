@@ -20,9 +20,7 @@ export function AuthPasswordField({
   const [visible, setVisible] = useState(false);
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
-  const describedBy =
-    [signingUp ? hintId : "", error ? errorId : ""].filter(Boolean).join(" ") ||
-    undefined;
+  const describedBy = error ? errorId : signingUp ? hintId : undefined;
 
   return (
     <div className="text-sm">
@@ -54,7 +52,7 @@ export function AuthPasswordField({
           )}
         </button>
       </div>
-      {signingUp && (
+      {signingUp && !error && (
         <p id={hintId} className="mt-2 text-[var(--reader-muted)]">
           {PASSWORD_LENGTH_HINT}
         </p>
