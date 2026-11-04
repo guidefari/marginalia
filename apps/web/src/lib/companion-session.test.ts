@@ -1,25 +1,33 @@
+// @vitest-environment happy-dom
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearAnswers,
   isRefreshOf,
   leaveArticle,
   readAnswers,
+  type StoredAnswer,
   stayOnArticle,
   writeAnswers,
 } from "./companion-session";
 
-const answer = {
+const answer: StoredAnswer = {
   id: "x",
-  mode: "define" as const,
+  mode: "define",
   selection: "tarn",
   paragraphIndex: 1,
-  turns: [{ role: "assistant" as const, content: "A lake." }],
+  turns: [{ role: "assistant", content: "A lake." }],
   model: null,
 };
 
 describe("isRefreshOf", () => {
-  const entry = (type: string, path: string) =>
-    ({ type, name: `https://example.com${path}?session=s1` }) as never;
+  const entry = (
+    type: PerformanceNavigationTiming["type"],
+    path: string,
+  ): Pick<PerformanceNavigationTiming, "type" | "name"> => ({
+    type,
+    name: `https://example.com${path}?session=s1`,
+  });
   it("is true only for a reload of that article's own address", () => {
     expect(isRefreshOf("a1", entry("reload", "/read/a1"))).toBe(true);
     // A book's answers are filed under its id and part, the address by id alone
@@ -33,9 +41,7 @@ describe("isRefreshOf", () => {
     expect(isRefreshOf("a1", entry("reload", "/read/a2"))).toBe(false);
     expect(isRefreshOf("a1", entry("reload", "/desk"))).toBe(false);
     expect(isRefreshOf("a1", undefined)).toBe(false);
-    expect(
-      isRefreshOf("a1", { type: "reload", name: "nonsense" } as never),
-    ).toBe(false);
+    expect(isRefreshOf("a1", { type: "reload", name: "nonsense" })).toBe(false);
   });
 });
 

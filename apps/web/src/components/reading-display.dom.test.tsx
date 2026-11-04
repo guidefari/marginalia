@@ -54,6 +54,7 @@ const button = (label: string) => {
   return found;
 };
 beforeEach(() => {
+  expect(Intl.NumberFormat().resolvedOptions().locale).toBe("en-US");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   host = document.body.appendChild(document.createElement("div"));
   root = createRoot(host);

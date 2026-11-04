@@ -86,6 +86,10 @@ The web dev script runs through the project's exact-pinned Portless dependency a
 
 Backend mutation tests use `convex-test` and the edge runtime. Its version is currently pinned to a release compatible with the installed Convex SDK; update the pair together rather than ignoring peer dependency errors. Tests do not require a deployed backend or real credentials.
 
+Web and backend Vitest suites each use at most three workers by default. The root test command runs package suites one at a time, keeping large fixture tests from competing with another package's workers and timing out under load. Test timeouts and coverage remain unchanged. Tests that need browser APIs select their browser environment per file, rather than changing the default Node environment for pure tests.
+
+Web test workers use an `en-US` locale through `LANG` and `LC_ALL`, keeping number-format assertions independent of the developer's host locale. This is test configuration only; the application keeps its locale-aware display behavior.
+
 ## Make a safe change
 
 1. Inspect the existing implementation and [recorded decisions](decisions.md).

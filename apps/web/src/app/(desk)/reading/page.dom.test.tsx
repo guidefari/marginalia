@@ -147,6 +147,7 @@ const room = (over: object = {}) => ({
 let root: Root;
 let container: HTMLDivElement;
 beforeEach(() => {
+  expect(Intl.NumberFormat().resolvedOptions().locale).toBe("en-US");
   (
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true;
