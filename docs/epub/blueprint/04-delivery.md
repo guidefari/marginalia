@@ -1,23 +1,20 @@
 # 04: Delivery
 
-The work ships as a stack of small pull requests from `guidefari/marginalia` to `planetaryescape/marginalia`, each one reviewable and deployable on its own.
+Feature review happens in `guidefari/marginalia` with incremental parent-branch diffs. Auth stays upstream; one feature integration PR goes to `planetaryescape/marginalia` once the reviewed stack is ready (D-EPUB-019).
 
-## Why every PR targets `main`
+## Fork review chain
 
-Guide has read access to the upstream repository, so branches live on the fork. A pull request from a fork can only target a branch in the upstream repository, never another fork branch. A conventional stack (PR 2's base set to PR 1's branch) is therefore impossible. Instead:
+Guide has read access upstream and owns the fork. The original upstream #96/#97 both targeted `main`, exposing cumulative diffs instead of useful review slices. D-EPUB-019 replaces that arrangement:
 
-- Each branch is cut from the previous branch in the stack.
-- Each PR targets upstream `main`, so until its parent merges it shows the parent's commits too.
-- Each PR body starts with `Stacked on #<parent>. Review only the commits after <parent's last commit>.` and lists the whole stack.
-- Upstream squash-merges (`… (#94)`), so after a parent merges, rebase the child onto `main` and drop the parent's original commits:
+- Upstream auth [#95](https://github.com/planetaryescape/marginalia/pull/95) remains unchanged.
+- Fork parser [#1](https://github.com/guidefari/marginalia/pull/1) targets `fix/local-auth-onboarding`, excluding auth from its diff.
+- Fork backend [#2](https://github.com/guidefari/marginalia/pull/2) targets `feat/epub-parser`, excluding parser/auth from its diff.
+- `fix/green-checks` targets `feat/epub-import-backend`; later feature branches continue from the reviewed tip.
+- Native fork stack #3 was created with `gh stack link --remote fork --base fix/local-auth-onboarding` using the fork PR URLs. Keep that explicit repository/remote selection when managing fork reviews.
+- Cross-link replacements before closing upstream #96/#97. Preserve their historical comments and carry pending suggestions into the owning fork review; closing a duplicate does not resolve its findings.
+- These fork PRs are review slices, not permission to merge the stack. Once ready, prepare one upstream integration PR. If auth has merged meanwhile, plan any necessary rebases explicitly so its commits are not replayed.
 
-```bash
-git fetch origin
-git rebase --onto origin/main <parent-branch> <child-branch>
-git push --force-with-lease fork <child-branch>
-```
-
-`<parent-branch>` is the local branch name of the merged parent, which still marks where the child's own commits begin. Then remove the "Stacked on" line from the child's body.
+Do not infer native-stack availability upstream from the successful fork registration. The earlier upstream attempt failed because stacked PRs were disabled and the parent branches existed only in the fork.
 
 ## The stack
 
@@ -68,3 +65,10 @@ Guide approved the backend import additions for local implementation in D-EPUB-0
 - The package test run with `--maxWorkers=3` passed all 2,232 backend tests and 32 vault-indexer tests. The final backend-only run after adding admission-limit coverage passed all 2,238 tests. The frontend passed 1,685 tests and retained its six known base failures: four missing-session-storage cases and two locale-dependent decimal assertions. The first default-worker run hit five timeouts in existing reporting/tag-budget tests; limiting worker concurrency passed them without changing code or timeouts. All 28 Deep Study script tests passed separately.
 - Typechecking passed across all three packages; changed-file Biome checks passed. The build passed with the existing 15 CSS parser warnings and Browserslist warning. `bun run check` still stops at the same eight unrelated formatting errors. No unrelated files were reformatted.
 - This work is local and not deployed. Native Convex Node execution, production scheduling/storage races and browser EPUB reading have not been verified. The next slice is the desk EPUB picker/drop flow. Token book endpoints, Apple Books placement/CLI, layout and production account allowances remain later work.
+
+## Check cleanup and fork review migration, 2026-11-04
+
+- Guide approved fixing the eight baseline formatting errors and six frontend failures in a separate slice above backend import. Formatting preserved all seven JSON values and the emitted TypeScript behavior. Companion session tests now select a real browser test environment; number-format tests use an explicit worker locale. Production locale behavior is unchanged.
+- The root test command now runs package suites one at a time, with at most three workers per web/backend suite. Running those suites together still caused existing resource-heavy fixtures to exceed their unchanged five-second deadlines. No assertions were weakened, tests skipped or timeouts increased.
+- The ordinary `bun run check` passed: lint had no errors, all workspace typechecks passed, and all 2,238 backend, 1,691 web, 32 indexer and 28 script tests passed. Five non-blocking lint warnings and one informational lint finding remain; the build also passed with its existing CSS/Browserslist warnings.
+- Fork parser #1 and backend #2 now have parent-branch bases and native GitHub stack #3. Ten untriaged parser suggestions and six backend suggestions from upstream #97 were copied into source-linked comments on their owning fork PRs. This migration does not claim to have fixed or resolved those suggestions. The old kickoff baseline-check suggestion is superseded by this green check run; the requirement to run the full check remains.

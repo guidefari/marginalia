@@ -11,7 +11,7 @@ Planned on 2026-11-04 in one session with Guide, who contributes to `planetaryes
 | 01 | [Plan](01-plan.md) | Six phases: parser, in-app import, layout fidelity, annotation API and placement, Apple Books CLI; schema changes and risks |
 | 02 | [Decisions](02-decisions.md) | Every decision with its attribution and the options rejected |
 | 03 | [Open questions](03-open-questions.md) | What to verify in code before building, and what to ask |
-| 04 | [Delivery](04-delivery.md) | The stacked pull requests from the fork, and how to keep them rebased |
+| 04 | [Delivery](04-delivery.md) | Incremental fork reviews, native stack registration and upstream integration |
 | K | [Kickoff](KICKOFF.md) | The prompt for the first build session |
 
 Related: the design blueprint ([../../design/blueprint/README.md](../../design/blueprint/README.md)), whose concept and design gate this feature works inside; `apps/web/DESIGN.md` for shipped patterns; and Leaf's `README.md`, `PROVENANCE.md` and `scripts/import-annotations.py` in the sibling `../epub` checkout, which hold the Apple Books knowledge being ported.
@@ -30,6 +30,8 @@ Related: the design blueprint ([../../design/blueprint/README.md](../../design/b
 The first EPUB PR includes this blueprint and the pure parser, stacked on auth PR #95 (D-EPUB-015, D-EPUB-016). There is no separate docs PR. Apple purple maps to the existing `cobalt` colour (D-EPUB-017); footnote PR scope remains open.
 
 The next branch, `feat/epub-import-backend`, implements the approved backend schema, format selection, book publication and image ownership/cleanup locally (D-EPUB-018). It is not deployed. The desk remains PDF-only apart from compatibility guards for the widened import result. The EPUB picker, layout work, token endpoints and Apple Books CLI remain future slices.
+
+Feature reviews now live in the fork: [parser #1](https://github.com/guidefari/marginalia/pull/1) targets the auth branch and [backend #2](https://github.com/guidefari/marginalia/pull/2) targets the parser. D-EPUB-019 replaces the cumulative upstream #96/#97 arrangement. Auth remains upstream #95; check cleanup is a separate slice above backend import.
 
 ## Rules for coding agents
 
