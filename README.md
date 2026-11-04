@@ -8,7 +8,7 @@ Readers sign in with a passkey or password, and each sees only their own library
 
 ## Run locally
 
-Use Bun 1.3.4 or newer, Node.js 22.12+ for the test tooling, and a Convex account. Start from a checkout of this repo:
+Use Bun 1.3.4 or newer, Node.js 24+ for Portless, and a Convex account. [Portless](https://github.com/vercel-labs/portless) is pinned as a web dev dependency and installed by Bun; no global installation is needed. Start from a checkout of this repo:
 
 ```bash
 bun install --frozen-lockfile
@@ -24,10 +24,12 @@ cp apps/web/.env.example apps/web/.env.local
 Replace both example URLs with `CONVEX_URL` and `CONVEX_SITE_URL` from your backend's `.env.local`. Never copy the existing personal deployment into a new installation. Then start the web app:
 
 ```bash
-bun run --cwd apps/web dev --port 3107
+bun run --cwd apps/web dev
 ```
 
-Open **http://localhost:3107**. Sign-in trusts only `localhost:3107`, `localhost:3108` and your `SITE_URL`, so other ports load but can't sign in. Add an RSS feed in **Sources**, or paste an article URL into the desk's search. For AI annotations and search, set `PROVIDER_KEYS_ENCRYPTION_KEY` on your Convex deployment and add your own provider key in Your account; see [setup](docs/development.md#enable-ai). Ordinary library data lives in Convex, not in the web process.
+On first run, Portless may ask for administrator approval to trust its local HTTPS certificate and bind port 443. Approve these prompts on your development machine. If certificate trust was skipped, run `bun run --cwd apps/web portless trust`.
+
+Open **https://marginalia.localhost**. Set `SITE_URL=https://marginalia.localhost` on your isolated Convex deployment so sign-in trusts the Portless origin. The existing numbered localhost origins remain supported; the Portless-assigned backend port is not the browser origin. Add an RSS feed in **Sources**, or paste an article URL into the desk's search. For AI annotations and search, set `PROVIDER_KEYS_ENCRYPTION_KEY` on your Convex deployment and add your own provider key in Your account; see [setup](docs/development.md#enable-ai). Ordinary library data lives in Convex, not in the web process.
 
 ## Check a change
 

@@ -82,7 +82,7 @@ Run at the repository root:
 | `bun run check` | Lint → typecheck → tests |
 | `bun run build` | Production Next.js build |
 
-Use `bun run --cwd apps/web dev --port 3108` if port 3107 is occupied; sign-in trusts only those two local ports. Next generates route types before typecheck so moved route groups do not leave stale references. Turbo build cache includes public Convex URLs and env files; changing deployments must not reuse a bundle with the previous URL.
+The web dev script runs through the project's exact-pinned Portless dependency at `https://marginalia.localhost`, with a dynamically assigned loopback port. `bun install --frozen-lockfile` installs it; a global Portless installation is not required. Node.js 24+ is required. First startup may request administrator approval for the local HTTPS certificate and port 443. Set that HTTPS URL as `SITE_URL` on an isolated Convex deployment to enable sign-in. Do not change the existing personal deployment's canonical origin for local setup. Next generates route types before typecheck so moved route groups do not leave stale references. Turbo build cache includes public Convex URLs and env files; changing deployments must not reuse a bundle with the previous URL.
 
 Backend mutation tests use `convex-test` and the edge runtime. Its version is currently pinned to a release compatible with the installed Convex SDK; update the pair together rather than ignoring peer dependency errors. Tests do not require a deployed backend or real credentials.
 
