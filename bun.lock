@@ -54,6 +54,7 @@
         "@types/react": "^19",
         "@types/react-dom": "^19",
         "autoprefixer": "^10.4.23",
+        "convex-test": "0.0.54",
         "happy-dom": "20.14.5",
         "portless": "0.16.0",
         "postcss": "^8.5.6",

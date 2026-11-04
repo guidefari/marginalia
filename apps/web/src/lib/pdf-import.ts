@@ -9,7 +9,9 @@ export type ImportFailure =
   | "too_long"
   | "unreadable"
   | "empty"
-  | "too_slow";
+  | "too_slow"
+  | "protected"
+  | "not_epub";
 
 export function isPdfFile(file: Pick<File, "name" | "type">): boolean {
   return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
@@ -56,6 +58,15 @@ export const FAILURE_COPY: Record<
     sentence: "Marginalia couldn't open this PDF.",
     detail:
       "It may be damaged or locked with a password. Nothing was added to your library.",
+  },
+  protected: {
+    sentence: "This file is protected and can't be read.",
+    detail:
+      "Choose a file without copy protection. Nothing was added to your library.",
+  },
+  not_epub: {
+    sentence: "This file isn't a valid EPUB.",
+    detail: "Nothing was added to your library.",
   },
 };
 

@@ -8,11 +8,7 @@ import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { InlineError, SavedMark } from "@/components/in-place";
 import { OPEN_ARTICLE, ViewTransition } from "@/components/view-transition";
-import {
-  FAILURE_COPY,
-  type ImportFailure,
-  importSteps,
-} from "@/lib/pdf-import";
+import { FAILURE_COPY, importSteps } from "@/lib/pdf-import";
 import { isOnControl, useShortcuts } from "@/lib/shortcuts";
 import { articleTitleName, rememberTitle } from "@/lib/title-handoff";
 import { invalidateTopicSearchCache } from "@/lib/topic-search-cache";
@@ -223,9 +219,13 @@ function Ready({
   );
 }
 
-type Latest = NonNullable<
+type LatestResult = NonNullable<
   ReturnType<typeof useQuery<typeof api.documentImports.latest>>
 >;
+
+type Latest = Omit<LatestResult, "format"> & {
+  format?: LatestResult["format"];
+};
 
 /**
  * The desk slot for a PDF being brought in: the upload, the server's steps,
@@ -236,7 +236,8 @@ export function ImportSlot({
   armed,
   ...props
 }: Omit<ImportViewProps, "latest" | "autoOpen"> & { armed: boolean }) {
-  const latest = useQuery(api.documentImports.latest, {});
+  const latestImport = useQuery(api.documentImports.latest, {});
+  const latest = latestImport?.format === "epub" ? null : latestImport;
   // The import that was already there when the file was dropped is not the one
   // to open; `undefined` means no baseline has been taken yet.
   const baseline = useRef<Id<"documentImports"> | null | undefined>(undefined);
@@ -297,12 +298,11 @@ export function ImportView({
       <Refusal sentence={problem} onFile={onFile} onDismiss={onClearProblem} />
     );
 
-  if (!latest) return <>{children}</>;
+  if (!latest || latest.format === "epub") return <>{children}</>;
   const dismiss = () => onDismiss(latest._id);
 
   if (latest.status === "failed") {
-    const copy =
-      FAILURE_COPY[(latest.failure ?? "unreadable") as ImportFailure];
+    const copy = FAILURE_COPY[latest.failure ?? "unreadable"];
     return (
       <Refusal
         sentence={copy.sentence}
