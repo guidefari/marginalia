@@ -129,7 +129,8 @@ export const setSpeechVoice = mutation({
     const row = await settingsRow(ctx, ctx.readerId);
     const patch = { speechVoice: args.voice, updatedAt: Date.now() };
     if (row) await ctx.db.patch("userSettings", row._id, patch);
-    else await ctx.db.insert("userSettings", { userId: ctx.readerId, ...patch });
+    else
+      await ctx.db.insert("userSettings", { userId: ctx.readerId, ...patch });
     return null;
   },
 });

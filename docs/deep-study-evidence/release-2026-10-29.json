@@ -37,19 +37,14 @@
     },
     "contextSummary": {
       "chapterCoverage": "full_retrieved_chapter",
-      "chapterRanges": [
-        "COL.2.1-COL.2.23"
-      ],
+      "chapterRanges": ["COL.2.1-COL.2.23"],
       "chapterReferenceKey": "COL.2.1-COL.2.23",
       "notesLimited": false,
       "readerContextChars": 0,
       "readerNoteCount": 0
     },
     "followUpStatus": "complete",
-    "supplementReferences": [
-      "GAL.5.13-GAL.5.16",
-      "PSA.13.1"
-    ],
+    "supplementReferences": ["GAL.5.13-GAL.5.16", "PSA.13.1"],
     "evidenceInspections": [
       {
         "reference": "GAL.5.13-GAL.5.16",
@@ -132,10 +127,7 @@
     "tool": "Vercel runtime logs",
     "since": "2026-10-29T17:35:12.585Z",
     "checkedAt": "2026-10-29T17:46:57Z",
-    "filter": [
-      "error",
-      "fatal"
-    ],
+    "filter": ["error", "fatal"],
     "groupBy": "requestPath",
     "groupsReturned": 0
   },

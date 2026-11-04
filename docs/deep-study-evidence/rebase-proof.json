@@ -6,8 +6,6 @@
   "afterTree": "2110587c1830783a2465dab06e2263a10926a837",
   "stablePatchId": "4a148298d7973d2e8f5313a5d1d27322c616dcd0",
   "taskPatchUnchanged": true,
-  "taskFilesChangedByUpstream": [
-    "packages/backend/convex/schema.ts"
-  ],
+  "taskFilesChangedByUpstream": ["packages/backend/convex/schema.ts"],
   "schemaChange": "Upstream feed-count fields; Deep-study additive field patch is unchanged."
 }
