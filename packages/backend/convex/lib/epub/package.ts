@@ -9,7 +9,8 @@ export function parseEpubPackage(
   if (!container.ok) return container;
   const rootfile = elements(container.value, "rootfile").find(
     (node) =>
-      node.getAttribute("media-type") === "application/oebps-package+xml",
+      node.getAttribute("media-type")?.toLowerCase() ===
+      "application/oebps-package+xml",
   );
   const path = resolveEpubHref("", rootfile?.getAttribute("full-path") ?? "");
   if (!path || path.includes("#")) return { ok: false, reason: "not_epub" };
@@ -24,36 +25,36 @@ export function parseEpubPackage(
   if (!metadata || !manifestNode || !spineNode)
     return { ok: false, reason: "not_epub" };
   const manifest: ManifestItem[] = [];
-  const ids = new Set<string>();
+  const itemsById = new Map<string, ManifestItem>();
   for (const node of elements(manifestNode, "item")) {
     const id = node.getAttribute("id");
     const href = resolveEpubHref(path, node.getAttribute("href") ?? "");
-    const mediaType = node.getAttribute("media-type");
-    if (!id || ids.has(id) || !href || href.includes("#") || !mediaType)
+    const mediaType = node.getAttribute("media-type")?.toLowerCase();
+    if (!id || itemsById.has(id) || !href || href.includes("#") || !mediaType)
       return { ok: false, reason: "not_epub" };
-    ids.add(id);
-    manifest.push({
+    const item: ManifestItem = {
       id,
       href,
       mediaType,
       properties: (node.getAttribute("properties") ?? "")
         .split(/\s+/u)
         .filter((value) => value.length > 0),
-    });
+    };
+    manifest.push(item);
+    itemsById.set(id, item);
   }
   const spine: ManifestItem[] = [];
-  for (const ref of elements(spineNode, "itemref")) {
-    const item = manifest.find(
-      (entry) => entry.id === ref.getAttribute("idref"),
-    );
+  const itemrefs = elements(spineNode, "itemref");
+  if (itemrefs.length > EPUB_LIMITS.spineItems)
+    return { ok: false, reason: "too_long" };
+  for (const ref of itemrefs) {
+    const item = itemsById.get(ref.getAttribute("idref") ?? "");
     if (!item || !files.has(item.href))
       return { ok: false, reason: "not_epub" };
     if (item.mediaType !== "application/xhtml+xml")
       return { ok: false, reason: "unreadable" };
     spine.push(item);
   }
-  if (spine.length > EPUB_LIMITS.spineItems)
-    return { ok: false, reason: "too_long" };
   const dcNamespace = "http://purl.org/dc/elements/1.1/";
   const identifiers = Array.from(
     metadata.getElementsByTagNameNS(dcNamespace, "identifier"),

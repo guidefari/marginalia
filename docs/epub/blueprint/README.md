@@ -20,7 +20,7 @@ Related: the design blueprint ([../../design/blueprint/README.md](../../design/b
 
 - **Shape:** EPUB is a second format in the PDF book pipeline (`documentImports`, `bookUnits`, `books`, `ImportSlot`), not a second reader (D-EPUB-001, D-EPUB-002).
 - **Fidelity:** keep structure, images and meaningful CSS; leave fonts and colours to the reader's themes (D-EPUB-003, D-EPUB-004).
-- **Apple Books:** a local, read-only CLI in `packages/apple-books`, like `packages/vault-indexer`, calling new token endpoints (D-EPUB-005, D-EPUB-006).
+- **Apple Books:** a local, read-only CLI in `packages/apple-books`, like `packages/vault-indexer`, calling new token endpoints (D-EPUB-006).
 - **Highlights are first-class:** CFIs resolve to unit and paragraph, are checked against the quote, and fall back to unplaced rather than a wrong mark (D-EPUB-008, D-EPUB-009).
 - **Merge:** one-way and idempotent; Marginalia edits win and deletions stick (D-EPUB-010).
 - **Order:** parser, in-app import, layout, annotation API, CLI (D-EPUB-012), shipped as stacked pull requests (D-EPUB-013).

@@ -17,8 +17,12 @@ export function epubUnits(
   let text = "";
   let title = "";
   let sourceSpans: SourceSpan[] = [];
+  let pendingTargets = new Set<string>();
   const close = () => {
-    if (html)
+    if (text.trim()) {
+      for (const target of pendingTargets) {
+        if (!targets.has(target)) targets.set(target, units.length);
+      }
       units.push({
         title,
         content: text,
@@ -30,10 +34,12 @@ export function epubUnits(
         ),
         sourceSpans,
       });
+    }
     html = "";
     text = "";
     title = "";
     sourceSpans = [];
+    pendingTargets = new Set();
   };
   for (const [spineIndex, item] of spine.entries()) {
     if (wordsOf(text) >= EPUB_LIMITS.shortItemWords) close();
@@ -54,10 +60,10 @@ export function epubUnits(
         close();
         title = item.title;
       }
-      if (!targets.has(item.href)) targets.set(item.href, units.length);
+      pendingTargets.add(item.href);
       for (const match of block.html.matchAll(/ id="([^"]+)"/gu)) {
         const id = match[1];
-        if (id && !targets.has(id)) targets.set(id, units.length);
+        if (id) pendingTargets.add(id);
       }
       const previous = sourceSpans.at(-1);
       if (previous?.spineIndex === spineIndex)
@@ -78,26 +84,30 @@ export function epubUnits(
     return { ok: false, reason: "too_long" };
   if (!units.some((unit) => unit.content.trim()))
     return { ok: false, reason: "empty" };
-  return {
-    ok: true,
-    value: units.map((unit) => ({
-      ...unit,
-      contentHtml: unit.contentHtml.replace(
-        / data-epub-href="([^"]+)"/gu,
-        (_match, encoded: string) => {
-          const target = decodeURIComponent(encoded);
-          const [href, fragment] = target.split("#");
-          const spineIndex = spine.findIndex((item) => item.href === href);
-          const anchor =
-            fragment && spineIndex >= 0
-              ? epubAnchor(spineIndex, decodeURIComponent(fragment))
-              : undefined;
-          const index = targets.get(anchor ?? href ?? "");
-          return index === undefined
-            ? ""
-            : ` href="?unit=${index}${anchor ? `#${anchor}` : ""}"`;
-        },
-      ),
-    })),
-  };
+  const mapped = units.map((unit) => ({
+    ...unit,
+    contentHtml: unit.contentHtml.replace(
+      / data-epub-href="([^"]+)"/gu,
+      (_match, encoded: string) => {
+        const target = decodeURIComponent(encoded);
+        const [href, fragment] = target.split("#");
+        const spineIndex = spine.findIndex((item) => item.href === href);
+        const anchor =
+          fragment && spineIndex >= 0
+            ? epubAnchor(spineIndex, decodeURIComponent(fragment))
+            : undefined;
+        const index = targets.get(anchor ?? href ?? "");
+        return index === undefined
+          ? ""
+          : ` href="?unit=${index}${anchor ? `#${anchor}` : ""}"`;
+      },
+    ),
+  }));
+  if (
+    mapped.some(
+      (unit) => bytesOf(unit.contentHtml, unit.content) > EPUB_LIMITS.unitBytes,
+    )
+  )
+    return { ok: false, reason: "too_long" };
+  return { ok: true, value: mapped };
 }

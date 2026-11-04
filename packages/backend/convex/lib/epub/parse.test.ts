@@ -86,6 +86,36 @@ describe("EPUB metadata and outline", () => {
     expect(parseEpub(files)).toEqual(parseEpub(archive(files)));
   });
 
+  it("normalizes case-insensitive media types before resolving content and images", () => {
+    const files = fixture({
+      extra: new Map([
+        ["OPS/images/chart.png", new Uint8Array([137, 80, 78, 71])],
+      ]),
+    });
+    const bytes = files.get("OPS/package.opf");
+    if (!bytes) throw new Error("Missing fixture package");
+    files.set(
+      "OPS/package.opf",
+      strToU8(
+        new TextDecoder()
+          .decode(bytes)
+          .replaceAll("image/png", "IMAGE/PNG")
+          .replaceAll("application/xhtml+xml", "APPLICATION/XHTML+XML"),
+      ),
+    );
+    const book = parsed(files);
+    expect(book.images).toEqual([
+      {
+        href: "OPS/images/chart.png",
+        mediaType: "image/png",
+        bytes: new Uint8Array([137, 80, 78, 71]),
+      },
+    ]);
+    expect(
+      book.manifest.find((item) => item.id === "chapter-0")?.mediaType,
+    ).toBe("application/xhtml+xml");
+  });
+
   it("uses nested EPUB 3 navigation before NCX and filters non-spine destinations", () => {
     const book = parsed(
       fixture({
@@ -200,6 +230,71 @@ describe("EPUB reading content", () => {
     expect(unit?.content).toBe("Before emphasis after.\n\nNext paragraph.");
   });
 
+  it("preserves preformatted whitespace through nested inline markup and source ranges", () => {
+    const pre = "\n  const café = 1;\n\t  return café &amp; value;\n\n";
+    const book = parsed(
+      fixture({
+        bodies: [
+          `<pre>\n  const <code>café</code> = 1;\n\t  return café &amp; value;\n\n</pre><blockquote><pre>${pre}</pre></blockquote><p>Ordinary   prose.</p>`,
+        ],
+      }),
+    );
+    expect(book.units[0]?.contentHtml).toContain(
+      "<pre>\n  const <code>café</code> = 1;\n\t  return café &amp; value;\n\n</pre>",
+    );
+    expect(book.units[0]?.contentHtml).toContain(
+      `<blockquote><pre>${pre}</pre></blockquote>`,
+    );
+    expect(book.units[0]?.content).toContain(
+      "\n  const café = 1;\n\t  return café & value;\n\n",
+    );
+    expect(book.spine[0]?.blocks[0]?.text).toBe(
+      "\n  const café = 1;\n\t  return café & value;\n\n",
+    );
+    for (const unit of book.units) {
+      expect(
+        unit.sourceSpans
+          .map((span) =>
+            book.spine[span.spineIndex]?.text.slice(span.start, span.end),
+          )
+          .join("\n\n"),
+      ).toBe(unit.content);
+    }
+  });
+
+  it("drops trailing blank units and makes their destinations inert without shifting valid links", () => {
+    const book = parsed(
+      fixture({
+        bodies: [
+          `<p>${"word ".repeat(150)}<a href="chapter-3.xhtml#blank">Blank</a><a href="chapter-3.xhtml">Empty chapter</a><a href="chapter-2.xhtml#last">Last</a></p>`,
+          `<p>${"word ".repeat(150)}</p>`,
+          `<p id="last">${"word ".repeat(150)}</p>`,
+          '<section id="blank"><hr/></section>',
+        ],
+      }),
+    );
+    expect(book.units).toHaveLength(3);
+    expect(book.units.every((unit) => unit.content.trim().length > 0)).toBe(
+      true,
+    );
+    expect(book.units[0]?.contentHtml).toContain("<a>Blank</a>");
+    expect(book.units[0]?.contentHtml).toContain("<a>Empty chapter</a>");
+    expect(book.units[0]?.contentHtml).toContain('href="?unit=2#epub-2-last"');
+  });
+
+  it("discards blank split candidates without assigning their anchors to a later unit", () => {
+    const book = parsed(
+      fixture({
+        bodies: [
+          `<pre id="blank">${" ".repeat(199_000)}</pre><p id="last">${"x".repeat(150_000)}<a href="#blank">Missing</a><a href="#last">Last</a></p>`,
+        ],
+      }),
+    );
+    expect(book.units).toHaveLength(1);
+    expect(book.units[0]?.contentHtml).toContain("<a>Missing</a>");
+    expect(book.units[0]?.contentHtml).toContain('href="?unit=0#epub-0-last"');
+  });
+
   it("rewrites internal references after splitting, including fragments in later units", () => {
     const paragraph = "word ".repeat(2100).trim();
     const book = parsed(
@@ -234,6 +329,22 @@ describe("EPUB reading content", () => {
       0, 1,
     ]);
     expect(book.units[0]?.content).toContain("For the reader.");
+  });
+
+  it("keeps short trailing matter separate instead of merging it backward", () => {
+    const book = parsed(
+      fixture({
+        bodies: [
+          `<h1>Chapter</h1><p>${"word ".repeat(150)}</p>`,
+          "<p>Colophon.</p>",
+        ],
+      }),
+    );
+    expect(book.units).toHaveLength(2);
+    expect(book.units[1]?.content).toBe("Colophon.");
+    expect(book.units[1]?.sourceSpans).toEqual([
+      { spineIndex: 1, start: 0, end: 9 },
+    ]);
   });
 
   it("keeps source ranges in UTF-16 text coordinates without losing split paragraphs", () => {
@@ -434,6 +545,58 @@ describe("EPUB refusals", () => {
     for (let index = 0; index < EPUB_LIMITS.files; index++)
       crowded.set(`extra-${index}`, new Uint8Array());
     expect(parseEpub(crowded)).toEqual({ ok: false, reason: "too_long" });
+  });
+
+  it("bounds aggregate ZIP expansion independently of individual entry sizes", () => {
+    const entry = new Uint8Array(EPUB_LIMITS.entryBytes);
+    const extra = new Map<string, Uint8Array>();
+    for (let index = 0; index < 9; index++)
+      extra.set(`expanded-${index}.bin`, entry);
+    const files = fixture({ extra });
+    const bytes = archive(files);
+    expect(bytes.byteLength).toBeLessThan(EPUB_LIMITS.archiveBytes);
+    expect(parseEpub(bytes)).toEqual({ ok: false, reason: "too_long" });
+    expect(parseEpub(files)).toEqual({ ok: false, reason: "too_long" });
+  });
+
+  it("rejects excessive spine references before trying to resolve them", () => {
+    const files = fixture();
+    const bytes = files.get("OPS/package.opf");
+    if (!bytes) throw new Error("Missing fixture package");
+    files.set(
+      "OPS/package.opf",
+      strToU8(
+        new TextDecoder()
+          .decode(bytes)
+          .replace(
+            '<itemref idref="chapter-0"/>',
+            '<itemref idref="missing"/>'.repeat(EPUB_LIMITS.spineItems + 1),
+          ),
+      ),
+    );
+    expect(parseEpub(files)).toEqual({ ok: false, reason: "too_long" });
+  });
+
+  it("refuses output that exceeds the unit byte budget after link rewriting", () => {
+    const files = fixture({
+      bodies: [
+        `<p>${"z".repeat(109_000)}<a id="x"/>${'<a href="#x"/>'.repeat(6000)}</p>`,
+      ],
+    });
+    const bytes = files.get("OPS/package.opf");
+    const chapter = files.get("OPS/text/chapter-0.xhtml");
+    if (!bytes || !chapter)
+      throw new Error("Missing fixture package or chapter");
+    files.set(
+      "OPS/package.opf",
+      strToU8(
+        new TextDecoder()
+          .decode(bytes)
+          .replace('href="text/chapter-0.xhtml"', 'href="../a"'),
+      ),
+    );
+    files.set("a", chapter);
+    expect(parseEpub(files)).toEqual({ ok: false, reason: "too_long" });
   });
 
   it("rejects archive traversal paths and paragraphs that cannot fit a unit", () => {

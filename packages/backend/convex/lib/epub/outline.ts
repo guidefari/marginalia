@@ -7,6 +7,7 @@ export function parseEpubOutline(
   files: ReadonlyMap<string, Uint8Array>,
   book: EpubPackage,
 ): EpubResult<readonly EpubOutlineEntry[]> {
+  const spineHrefs = new Set(book.spine.map((item) => item.href));
   const nav = book.manifest.find((item) => item.properties.includes("nav"));
   if (nav) {
     const parsed = parseEpubXml(files.get(nav.href));
@@ -25,11 +26,7 @@ export function parseEpubOutline(
             node.getAttribute("href") ?? "",
           );
           const title = xmlText(node);
-          if (
-            href &&
-            title &&
-            book.spine.some((item) => item.href === href.split("#")[0])
-          )
+          if (href && title && spineHrefs.has(href.split("#")[0] ?? ""))
             entries.push({ title, href, depth: Math.max(0, depth - 1) });
         }
         for (const child of childElements(node))
@@ -53,11 +50,7 @@ export function parseEpubOutline(
         elements(node, "content")[0]?.getAttribute("src") ?? "",
       );
       const title = xmlText(elements(node, "navLabel")[0]);
-      if (
-        href &&
-        title &&
-        book.spine.some((item) => item.href === href.split("#")[0])
-      )
+      if (href && title && spineHrefs.has(href.split("#")[0] ?? ""))
         entries.push({ title, href, depth });
     }
     for (const child of childElements(node))

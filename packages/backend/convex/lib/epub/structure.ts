@@ -107,11 +107,18 @@ export function parseEpubSpineItem(
   const blocks: EpubBlock[] = [];
   let text = "";
   let title = "";
-  const append = (html: string, plain: string, heading: boolean) => {
-    const content = plain
-      .replace(/[^\S\n]+/gu, " ")
-      .replace(/ *\n */gu, "\n")
-      .trim();
+  const append = (
+    html: string,
+    plain: string,
+    heading: boolean,
+    preformatted = false,
+  ) => {
+    const content = preformatted
+      ? plain
+      : plain
+          .replace(/[^\S\n]+/gu, " ")
+          .replace(/ *\n */gu, "\n")
+          .trim();
     if (!html.trim()) return;
     if (blocks.length) text += "\n\n";
     const start = text.length;
@@ -119,9 +126,14 @@ export function parseEpubSpineItem(
     blocks.push({ html, text: content, start, end: text.length });
     if (heading && !title) title = content;
   };
-  const render = (node: Node): { html: string; text: string } => {
+  const render = (
+    node: Node,
+    preformatted = false,
+  ): { html: string; text: string } => {
     if (node.nodeType === 3 || node.nodeType === 4) {
-      const value = (node.nodeValue ?? "").replace(/\s+/gu, " ");
+      const value = preformatted
+        ? (node.nodeValue ?? "")
+        : (node.nodeValue ?? "").replace(/\s+/gu, " ");
       return { html: escapeHtml(value), text: value };
     }
     if (node.nodeType !== 1) return { html: "", text: "" };
@@ -134,7 +146,10 @@ export function parseEpubSpineItem(
       element.getAttribute("aria-hidden") === "true"
     )
       return { html: "", text: "" };
-    const children = Array.from(element.childNodes).map(render);
+    const preserveWhitespace = preformatted || tag === "pre";
+    const children = Array.from(element.childNodes).map((child) =>
+      render(child, preserveWhitespace),
+    );
     const html = children.map((child) => child.html).join("");
     const plain = children.map((child) => child.text).join("");
     const originalId = element.getAttribute("id");
@@ -178,8 +193,9 @@ export function parseEpubSpineItem(
           })
           .join("")
       : "";
-    const separator =
-      blockTags.has(tag) || ["li", "tr", "dt", "dd"].includes(tag)
+    const separator = preserveWhitespace
+      ? ""
+      : blockTags.has(tag) || ["li", "tr", "dt", "dd"].includes(tag)
         ? "\n"
         : tag === "td" || tag === "th"
           ? " "
@@ -244,6 +260,7 @@ export function parseEpubSpineItem(
       block ? rendered.html : `<p>${rendered.html}</p>`,
       rendered.text,
       /^h[1-6]$/u.test(tag),
+      !!element && (tag === "pre" || elements(element, "pre").length > 0),
     );
   };
   visit(body);
