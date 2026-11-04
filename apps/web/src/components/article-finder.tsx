@@ -13,7 +13,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { PdfPickerButton } from "@/components/desk/pdf-picker";
+import { DocumentPickerButton } from "@/components/desk/document-picker";
 import {
   FinderNotes,
   noteHitLink,
@@ -99,7 +99,7 @@ function metaLine(match: TopicMatch) {
 export function ArticleFinder({
   windowMinutes = null,
   onClearWindow,
-  onPdf,
+  onDocument,
   onType,
   showKey = false,
   scope = "articles",
@@ -107,8 +107,7 @@ export function ArticleFinder({
 }: {
   windowMinutes?: number | null;
   onClearWindow?: () => void;
-  /** A PDF chosen from the picker; the desk reads it in. */
-  onPdf?: (file: File) => void;
+  onDocument?: (file: File) => void;
   /** Called when the reader types in the bar. */
   onType?: () => void;
   /** The desk's hold-Alt overlay: show the `/` key on the trigger. */
@@ -264,7 +263,7 @@ export function ArticleFinder({
   useShortcuts({ "/": () => setOpen(true) }, true, {
     help: {
       group: "Desk",
-      keys: [["/", "Search, paste a link or choose a PDF"]],
+      keys: [["/", "Search, paste a link or choose a PDF or EPUB"]],
     },
   });
   useCommand("open-finder", () => {
@@ -487,12 +486,12 @@ export function ArticleFinder({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-keyshortcuts="/"
-        title="Ask, paste a link, or drop a PDF · press /"
+        title="Ask, paste a link, or drop a PDF or EPUB · press /"
         className="flex w-full items-center gap-2.5 h-12 rounded-lg px-4 bg-[var(--reader-surface)] ring-1 ring-[var(--reader-border)] text-left text-[var(--reader-muted)] hover:text-[var(--reader-fg)] transition-colors"
       >
         <Search size={16} className="shrink-0" />
         <span className="flex-1 min-w-0 truncate text-[15px]">
-          Ask, paste a link, or drop a PDF
+          Ask, paste a link, or drop a PDF or EPUB
         </span>
         {showKey && (
           <kbd className="reader-kbd hidden md:inline-block" aria-hidden>
@@ -581,18 +580,18 @@ export function ArticleFinder({
           {!text && (
             <div className="px-5 py-6 text-[14px] text-[var(--reader-muted)]">
               <p>Search Articles, Bible, or both. You can also paste a link.</p>
-              {onPdf && (
+              {onDocument && (
                 <p className="mt-3">
                   Or{" "}
-                  <PdfPickerButton
+                  <DocumentPickerButton
                     className="text-[var(--reader-fg-soft)] underline decoration-[var(--reader-border-strong)] underline-offset-[3px] hover:text-[var(--reader-fg)]"
                     onFile={(file) => {
                       closeFinder();
-                      onPdf(file);
+                      onDocument(file);
                     }}
                   >
-                    choose a PDF
-                  </PdfPickerButton>{" "}
+                    choose a PDF or EPUB
+                  </DocumentPickerButton>{" "}
                   to read.
                 </p>
               )}

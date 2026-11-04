@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PdfDrop } from "./pdf-drop";
+import { DocumentDrop } from "./document-drop";
 
 let root: Root;
 const onFile = vi.fn();
@@ -10,7 +10,7 @@ const onFile = vi.fn();
 beforeEach(() => {
   onFile.mockReset();
   root = createRoot(document.body.appendChild(document.createElement("div")));
-  act(() => root.render(<PdfDrop onFile={onFile} />));
+  act(() => root.render(<DocumentDrop onFile={onFile} />));
 });
 afterEach(() => {
   act(() => root.unmount());
@@ -29,13 +29,21 @@ const drag = (type: string, files: File[] = [], withFiles = true) => {
 };
 const pdf = new File(["%PDF-"], "book.pdf", { type: "application/pdf" });
 
-describe("dropping a PDF on the desk", () => {
+describe("dropping a document on the desk", () => {
+  it("takes the first EPUB from a mixed drop without skipping to a later PDF", () => {
+    const epub = new File(["book"], "Book.EPUB");
+    const png = new File(["image"], "cover.png", { type: "image/png" });
+    drag("dragenter", [png, epub, pdf]);
+    drag("drop", [png, epub, pdf]);
+    expect(onFile).toHaveBeenCalledExactlyOnceWith(epub);
+    expect(document.body.textContent).not.toContain("Drop to read");
+  });
   it("shows one calm target while a file is dragged over", () => {
     expect(document.body.textContent).not.toContain("Drop to read");
     drag("dragenter", [pdf]);
     expect(document.body.textContent).toContain("Drop to read");
     expect(document.body.textContent).toContain(
-      "A PDF becomes an article in your library",
+      "Add a PDF or EPUB to your library",
     );
   });
 

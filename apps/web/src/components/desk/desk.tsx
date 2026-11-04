@@ -8,15 +8,15 @@ import { ArticleFinder } from "@/components/article-finder";
 import { BibleDiscovery, BibleTimePick } from "@/components/bible-discovery";
 import { DeskPick } from "@/components/desk/desk-pick";
 import { ContinueShortcut, DeskRest } from "@/components/desk/desk-rest";
+import { DocumentDrop } from "@/components/desk/document-drop";
 import { ImportSlot } from "@/components/desk/import-slot";
-import { PdfDrop } from "@/components/desk/pdf-drop";
 import { QueryBoundary } from "@/components/desk/query-boundary";
 import { type Fits, TimeChoices } from "@/components/desk/time-choices";
 import { parseDeskLink } from "@/lib/desk-link";
 import { useShortcuts } from "@/lib/shortcuts";
 import { arrivedFromFinish } from "@/lib/title-handoff";
 import { useAltHint } from "@/lib/use-alt-hint";
-import { usePdfImport } from "@/lib/use-pdf-import";
+import { useDocumentImport } from "@/lib/use-document-import";
 
 // A repeat of the same choice this soon is a double click, not a toggle off
 export const DOUBLE_CHOICE_MS = 400;
@@ -46,14 +46,15 @@ function Desk({ fromFinish }: { fromFinish?: boolean }) {
   const params = useSearchParams();
   const showKeys = useAltHint();
   const link = parseDeskLink(params);
-  const pdf = usePdfImport();
+  const documentImport = useDocumentImport();
   // Armed by a file dropped or picked here; anything else the reader starts
   // (a time, a typed ask, a new link) disarms it, so a PDF never snatches them
   // away from what they chose since.
   const [armed, setArmed] = useState(false);
-  const startPdf = (file: File) => {
+  const startDocument = (file: File) => {
+    setChosen(null);
     setArmed(true);
-    void pdf.start(file);
+    void documentImport.start(file);
   };
   // Done brought us here: the slot slides its next pick in (globals.css)
   const [arrival, setArrival] = useState(() =>
@@ -157,7 +158,7 @@ function Desk({ fromFinish }: { fromFinish?: boolean }) {
 
       <BibleDiscovery preferences={bible} />
       <ArticleFinder
-        onPdf={startPdf}
+        onDocument={startDocument}
         onType={() => setArmed(false)}
         showKey={showKeys}
         windowMinutes={chosen?.minutes ?? null}
@@ -193,11 +194,12 @@ function Desk({ fromFinish }: { fromFinish?: boolean }) {
           <QueryBoundary fallback={(retry) => <SlotFailure retry={retry} />}>
             <ImportSlot
               armed={armed}
-              upload={pdf.upload}
-              problem={pdf.problem}
-              onFile={startPdf}
-              onClearProblem={pdf.clearProblem}
-              onDismiss={pdf.dismiss}
+              targetImportId={documentImport.importId}
+              upload={documentImport.upload}
+              problem={documentImport.problem}
+              onFile={startDocument}
+              onClearProblem={documentImport.clearProblem}
+              onDismiss={documentImport.dismiss}
             >
               <DeskRest showKeys={showKeys} />
             </ImportSlot>
@@ -205,7 +207,7 @@ function Desk({ fromFinish }: { fromFinish?: boolean }) {
         )}
       </section>
 
-      {bible?.scope !== "bible" && <PdfDrop onFile={startPdf} />}
+      {bible?.scope !== "bible" && <DocumentDrop onFile={startDocument} />}
     </main>
   );
 }

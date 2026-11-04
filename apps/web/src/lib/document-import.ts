@@ -1,8 +1,20 @@
-// What the desk shows while a PDF is brought in (rung 3b). Copy lives here so
-// the refusals read the same wherever they appear.
-
-/** The server refuses larger files (documentImports.MAX_PDF_BYTES). */
 export const MAX_PDF_MB = 60;
+export const MAX_EPUB_MB = 32;
+export type DocumentFormat = "pdf" | "epub";
+
+export function documentFormat(
+  file: Pick<File, "name" | "type">,
+): DocumentFormat | null {
+  if (/\.epub$/i.test(file.name)) return "epub";
+  if (/\.pdf$/i.test(file.name)) return "pdf";
+  if (file.type === "application/epub+zip") return "epub";
+  if (file.type === "application/pdf") return "pdf";
+  return null;
+}
+
+export function documentContentType(format: DocumentFormat): string {
+  return format === "epub" ? "application/epub+zip" : "application/pdf";
+}
 
 export type ImportFailure =
   | "scanned"
@@ -17,17 +29,18 @@ export function isPdfFile(file: Pick<File, "name" | "type">): boolean {
   return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
 }
 
-/** The first dropped item that is a PDF, so a stray image alongside it doesn't stop the import. */
-export function firstPdf(files: Iterable<File>): File | null {
-  for (const file of files) if (isPdfFile(file)) return file;
+export function firstDocument(files: Iterable<File>): File | null {
+  for (const file of files) if (documentFormat(file)) return file;
   return null;
 }
 
 /** A problem with the file itself, found before anything is uploaded. */
 export function problemWithFile(file: File): string | null {
-  if (!isPdfFile(file)) return "Marginalia reads PDF files.";
-  if (file.size > MAX_PDF_MB * 1024 * 1024)
-    return `That file is over ${MAX_PDF_MB} MB, which is more than Marginalia can read.`;
+  const format = documentFormat(file);
+  if (!format) return "Marginalia reads PDF and EPUB files.";
+  const limit = format === "epub" ? MAX_EPUB_MB : MAX_PDF_MB;
+  if (file.size > limit * 1024 * 1024)
+    return `That file is over ${limit} MB, which is more than Marginalia can read.`;
   if (file.size === 0) return "That file is empty.";
   return null;
 }
@@ -70,6 +83,41 @@ export const FAILURE_COPY: Record<
   },
 };
 
+export function importFailureCopy(
+  failure: ImportFailure,
+  format: DocumentFormat = "pdf",
+): { sentence: string; detail: string } {
+  if (format === "pdf") return FAILURE_COPY[failure];
+  switch (failure) {
+    case "empty":
+      return {
+        sentence: "Marginalia found no text it could read in this EPUB.",
+        detail: "Nothing was added to your library.",
+      };
+    case "too_long":
+      return {
+        sentence:
+          "This EPUB is larger or more complex than Marginalia can read.",
+        detail: "Nothing was added to your library.",
+      };
+    case "too_slow":
+      return {
+        sentence: "This EPUB took too long to read.",
+        detail: "Nothing was added to your library.",
+      };
+    case "unreadable":
+    case "scanned":
+      return {
+        sentence: "Marginalia couldn't open this EPUB.",
+        detail:
+          "It may be damaged or unsupported. Nothing was added to your library.",
+      };
+    case "protected":
+    case "not_epub":
+      return FAILURE_COPY[failure];
+  }
+}
+
 export interface ImportSteps {
   /** Lines already done, in order */
   done: string[];
@@ -78,6 +126,7 @@ export interface ImportSteps {
 }
 
 export function importSteps(input: {
+  format?: DocumentFormat;
   step: "text" | "sections" | "point";
   pages?: number;
   units?: number;
@@ -85,9 +134,11 @@ export function importSteps(input: {
   const done: string[] = [];
   if (input.step !== "text")
     done.push(
-      input.pages
-        ? `Text from all ${input.pages.toLocaleString()} pages`
-        : "Text from every page",
+      input.format === "epub"
+        ? "Text from its chapters"
+        : input.pages
+          ? `Text from all ${input.pages.toLocaleString()} pages`
+          : "Text from every page",
     );
   if (input.step === "point")
     done.push(
@@ -107,7 +158,7 @@ export function importSteps(input: {
  * The file's SHA-256 as lowercase hex, which the server checks against the
  * stored file so an upload grant covers only these bytes. WebCrypto cannot
  * hash a stream, so this holds the whole file in memory once more (up to
- * MAX_PDF_MB) for the length of one digest call.
+ * the format's size limit) for the length of one digest call.
  */
 export async function sha256Hex(file: Blob): Promise<string> {
   const digest = await crypto.subtle.digest(
@@ -124,11 +175,12 @@ export function uploadWithProgress(
   url: string,
   file: File,
   onProgress: (percent: number) => void,
+  format: DocumentFormat = "pdf",
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("POST", url);
-    request.setRequestHeader("Content-Type", "application/pdf");
+    request.setRequestHeader("Content-Type", documentContentType(format));
     request.upload.onprogress = (event) => {
       if (event.lengthComputable)
         onProgress(Math.round((event.loaded / event.total) * 100));
@@ -141,7 +193,18 @@ export function uploadWithProgress(
       if (request.status < 200 || request.status >= 300)
         return reject(new Error("The upload didn't finish."));
       try {
-        resolve(String(JSON.parse(request.responseText).storageId));
+        const response: unknown = JSON.parse(request.responseText);
+        if (
+          typeof response !== "object" ||
+          response === null ||
+          !("storageId" in response) ||
+          typeof response.storageId !== "string" ||
+          response.storageId.length === 0
+        ) {
+          reject(new Error("The upload didn't finish."));
+          return;
+        }
+        resolve(response.storageId);
       } catch {
         reject(new Error("The upload didn't finish."));
       }

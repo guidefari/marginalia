@@ -1,8 +1,7 @@
 "use client";
 import { useRef } from "react";
 
-/** A button that opens the file picker for one PDF and hands the file on. */
-export function PdfPickerButton({
+export function DocumentPickerButton({
   onFile,
   className,
   children,
@@ -17,7 +16,7 @@ export function PdfPickerButton({
       <input
         ref={input}
         type="file"
-        accept="application/pdf,.pdf"
+        accept="application/pdf,.pdf,application/epub+zip,.epub"
         className="sr-only"
         tabIndex={-1}
         aria-hidden
