@@ -12,7 +12,7 @@ A pure, tested module at `packages/backend/convex/lib/epub/`, used by both the i
 2. **Refuse early.** Missing container or OPF is `not_epub`. A `META-INF/encryption.xml` listing anything other than font obfuscation is `protected` (DRM). No readable spine text is `empty`. Past the size or unit cap is `too_long`.
 3. **Outline.** EPUB 3 `nav` document, falling back to the EPUB 2 NCX, then to spine order with headings found in the text.
 4. **Normalise each spine item** to the reader's HTML: an allowlist of structural tags (headings, `p`, `blockquote`, lists, tables, `figure`/`figcaption`, `hr`, `aside`, `sup`/`sub`, `em`/`strong`, `br` inside verse), relative links rewritten to unit links, scripts and forms dropped. Record the item's plain text with character offsets so later phases can map positions.
-5. **Units.** Chapter-aligned. A chapter over the unit word budget splits at paragraph boundaries; leading short items (title page, epigraph, dedication) merge forward into the next item while budgets permit. A trailing short item after a full chapter remains separate. Each unit records the spine items and character ranges it covers.
+5. **Units.** Chapter-aligned. A chapter over the unit word budget splits at top-level reading-block boundaries; leading short items (title page, epigraph, dedication) merge forward into the next item while budgets permit. A trailing short item after a full chapter remains separate. Each unit records the spine items and character ranges it covers.
 
 Tests use small fixture EPUBs built in the test (EPUB 2 and 3, nested nav, an encrypted manifest, an unpacked-directory layout) rather than real books.
 
