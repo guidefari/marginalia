@@ -25,10 +25,10 @@ export function AuthPasswordField({
   return (
     <div className="text-sm">
       <label htmlFor={id}>Password</label>
-      <div className="app-input mt-2 !flex items-center !p-0 focus-within:outline focus-within:outline-1 focus-within:outline-offset-2 focus-within:outline-[var(--reader-border-strong)]">
+      <div className="focus-frame app-input mt-2 !flex items-center !p-0">
         <input
           id={id}
-          className="min-w-0 flex-1 rounded-l-[9px] bg-transparent px-3 py-2.5 text-base !outline-none"
+          className="min-w-0 flex-1 rounded-l-[9px] bg-transparent px-3 py-2.5 text-base outline-none"
           name="password"
           type={visible ? "text" : "password"}
           autoComplete={signingUp ? "new-password" : "current-password"}
